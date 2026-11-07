@@ -1,0 +1,149 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile and imperial sovereign metadata for an authenticated commander.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the user.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Commander display name.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "Commander avatar URL.",
+          "minLength": 0,
+          "maxLength": 500
+        },
+        "imperialTitle": {
+          "type": "string",
+          "description": "Current chosen imperial title in Pax Historia.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "lastActiveWorldName": {
+          "type": "string",
+          "description": "Name of the most recently played planetary world.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Account registration server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Profile last update server timestamp."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "imperialTitle",
+        "lastActiveWorldName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CloudWorldSave": {
+      "title": "CloudWorldSave",
+      "description": "Cloud-persisted Pax Historia 3D planetary world state belonging to an authenticated user.",
+      "type": "object",
+      "properties": {
+        "saveId": {
+          "type": "string",
+          "description": "Unique identifier of the save slot.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Save slot display name.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "worldName": {
+          "type": "string",
+          "description": "Name of the planetary world.",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "turnNumber": {
+          "type": "number",
+          "description": "Current imperial turn / epoch number."
+        },
+        "activePresetId": {
+          "type": "string",
+          "description": "Active planetary biome preset identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "activeZoneId": {
+          "type": "string",
+          "description": "Active planetary plateau zone identifier.",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "payload": {
+          "type": "object",
+          "description": "Structured world save payload (config, stats, active zone, history)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Save creation server timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Save update server timestamp."
+        }
+      },
+      "required": [
+        "saveId",
+        "ownerId",
+        "name",
+        "worldName",
+        "turnNumber",
+        "activePresetId",
+        "activeZoneId",
+        "payload",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Stores authenticated commander profile metadata (isolated without PII)."
+    },
+    "/worldSaves/{saveId}": {
+      "schema": {
+        "$ref": "#/entities/CloudWorldSave"
+      },
+      "description": "Stores cloud-synchronized Pax Historia 3D world saves scoped by ownerId."
+    }
+  }
+}

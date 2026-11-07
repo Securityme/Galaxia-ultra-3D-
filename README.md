@@ -1,11 +1,20 @@
-<div align="center">
+# GALAXIA ULTRA • Bio-Dôme de Poche // Monde-Plateau Spectateur
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Application interactive Next.js / Express + WebGL/Three.js + Jotai + Gemini API.
+Le spectateur contemple un plateau spatial miniature flottant dans le cosmos et arbitre son développement via des événements narratifs générés par LLM.
 
-  <h1>Built with AI Studio</h2>
+## Architecture
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+| Dossier | Responsabilité |
+| :--- | :--- |
+| `server.ts` | Serveur Express, endpoint `/api/ai/turn` (Gemini SDK), Vite dev |
+| `src/lib/` | Moteurs purs mathématiques, PRNG, bruit fractal, contrats Zod, fallback |
+| `src/three/` | Scène WebGL pure (plateau, espace, bâtiments low-poly, PNJ, caméra spectateur) |
+| `src/stores/` | Atomes d'état Jotai (la 3D lit le store sans jamais y écrire) |
+| `src/components/` | Interface verre dépoli Tailwind, HUD télémétrique, dialogues d'événements |
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+## Invariants & Règles
 
-</div>
+1. **Spectateur Pur** : Pas de globe ni de personnage piloté. Caméras Orbite 360° et Plateau.
+2. **LLM Arbitré** : Le LLM propose, les contrats Zod valident, le moteur pur applique.
+3. **Zéro Rupture** : Générateur procédural de secours si aucune clé API n'est fournie.

@@ -1,0 +1,322 @@
+/**
+ * PAX HISTORIA 3D • Planetary Plateau Zones Catalog
+ * Defines multiple distinct Plateau Regions distributed across the 3D Planet Globe.
+ * Each region has spherical coordinates (lat/lon), biome affinity, relief profile,
+ * an Arrival Zone name, and initial settlement structures.
+ */
+
+import {
+  bld_TYPE_BIO_DOME,
+  bld_TYPE_GREENHOUSE,
+  bld_TYPE_HABITAT,
+  bld_TYPE_OBSERVATION,
+  bld_TYPE_RELAY_TOWER,
+} from './constants';
+import { PlacedBuilding, PlacedNpc } from '../contracts/schemas';
+import { buildStarterNpcs } from './gameDefaults';
+
+export interface PlanetaryZoneDefinition {
+  id: string;
+  name: string;
+  regionCode: string;
+  arrivalPortName: string;
+  continentName: string;
+  latDeg: number;
+  lonDeg: number;
+  presetId: string;
+  reliefScale: number;
+  seedSuffix: string;
+  strategicBonus: string;
+  description: string;
+  beaconColor: string;
+  initialBuildings: PlacedBuilding[];
+}
+
+export interface PlanetaryZoneRuntimeState {
+  zoneId: string;
+  buildings: PlacedBuilding[];
+  npcs: PlacedNpc[];
+  convoysReceived: number;
+}
+
+export const PLANETARY_ZONES: readonly PlanetaryZoneDefinition[] = [
+  {
+    id: 'zone_aethelgard',
+    name: 'Haut-Plateau d’Aethelgard',
+    regionCode: 'REG-01 • CAPITALE',
+    arrivalPortName: 'Porte Céleste d’Aethelgard',
+    continentName: 'Continent Central d’Aurélia',
+    latDeg: 22,
+    lonDeg: 18,
+    presetId: 'terra_blue',
+    reliefScale: 1.45,
+    seedSuffix: 'AETHELGARD-01',
+    strategicBonus: '+15% Stabilité & Cartographie Impériale',
+    description:
+      'Berceau historique de la Pax Historia. Ses vallées tempérées et ses terrasses calcaires abritent le Grand Observatoire et la Porte Céleste principale.',
+    beaconColor: '#fbbf24',
+    initialBuildings: [
+      {
+        id: 'bld_aethel_obs',
+        buildingType: bld_TYPE_OBSERVATION,
+        name: 'Citadelle Astronomique d’Aethelgard',
+        description: 'Siège du Conseil des Méridiens surplombant la vallée centrale.',
+        x: 0,
+        z: -4.5,
+        rotation: 0.2,
+        scale: 1.05,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_aethel_dome',
+        buildingType: bld_TYPE_BIO_DOME,
+        name: 'Conservatoire Impérial Aube',
+        description: 'Coupole botanique réunissant les flores des six continents.',
+        x: -8.5,
+        z: 4.5,
+        rotation: 0.8,
+        scale: 1.0,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_aethel_relay',
+        buildingType: bld_TYPE_RELAY_TOWER,
+        name: 'Obélisque Télémétrique Alpha',
+        description: 'Relais de synchronisation orbitale guidant les navettes vers la Zone d’Arrivée.',
+        x: 9.2,
+        z: 3.8,
+        rotation: -0.4,
+        scale: 1.05,
+        assembledAt: 0,
+      },
+    ],
+  },
+  {
+    id: 'zone_solis_caldera',
+    name: 'Caldeira Impériale d’Hélios',
+    regionCode: 'REG-02 • FORGE',
+    arrivalPortName: 'Astroport Basaltique de Prométhée',
+    continentName: 'Archipel Volcanique Méridional',
+    latDeg: -16,
+    lonDeg: 78,
+    presetId: 'volcanic_core',
+    reliefScale: 1.75,
+    seedSuffix: 'HELIOS-CALDERA-02',
+    strategicBonus: '+25% Prospérité Énergétique & Métallurgie',
+    description:
+      'Plateau volcanique riche en géothermie où d’immenses phares électromagnétiques captent l’énergie tellurique des failles d’ambre.',
+    beaconColor: '#f97316',
+    initialBuildings: [
+      {
+        id: 'bld_solis_relay1',
+        buildingType: bld_TYPE_RELAY_TOWER,
+        name: 'Grand Phare Géothermique d’Hélios',
+        description: 'Capte la puissance des rivières magmatiques pour alimenter l’archipel.',
+        x: -4.5,
+        z: -5.0,
+        rotation: 0.4,
+        scale: 1.15,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_solis_relay2',
+        buildingType: bld_TYPE_RELAY_TOWER,
+        name: 'Pylône de Confinement Ignis',
+        description: 'Stabilise les courants telluriques autour de l’esplanade d’arrivée.',
+        x: 7.5,
+        z: -2.0,
+        rotation: -0.6,
+        scale: 1.0,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_solis_hab',
+        buildingType: bld_TYPE_HABITAT,
+        name: 'Bastion des Maîtres-Forgerons',
+        description: 'Quartier fortifié en basalte et bronze abritant les ingénieurs.',
+        x: -7.0,
+        z: 5.5,
+        rotation: 1.1,
+        scale: 1.0,
+        assembledAt: 0,
+      },
+    ],
+  },
+  {
+    id: 'zone_hyperborea',
+    name: 'Couronne Glaciaire d’Hyperborée',
+    regionCode: 'REG-03 • ARCHIVES',
+    arrivalPortName: 'Quai Polaire de Cristal-Nord',
+    continentName: 'Massif Boréal de Saphir',
+    latDeg: 54,
+    lonDeg: -48,
+    presetId: 'glacial_aurora',
+    reliefScale: 1.55,
+    seedSuffix: 'HYPERBOREA-03',
+    strategicBonus: '+25% Savoir Scientifique & Calcul Quantique',
+    description:
+      'Hauts plateaux de glace pure sous les aurores boréales, abritant les bibliothèques cryogéniques et les télescopes de l’Empire.',
+    beaconColor: '#38bdf8',
+    initialBuildings: [
+      {
+        id: 'bld_hyper_obs',
+        buildingType: bld_TYPE_OBSERVATION,
+        name: 'Observatoire Zénithal Boréal',
+        description: 'Scrute les constellations polaires à travers une atmosphère cristalline.',
+        x: 2.0,
+        z: -6.0,
+        rotation: 0.0,
+        scale: 1.12,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_hyper_dome',
+        buildingType: bld_TYPE_BIO_DOME,
+        name: 'Sanctuaire des Archives Cryo',
+        description: 'Conserve les traités historiques et les semences anciennes sous dôme chauffé.',
+        x: -6.5,
+        z: 2.5,
+        rotation: 0.5,
+        scale: 1.02,
+        assembledAt: 0,
+      },
+    ],
+  },
+  {
+    id: 'zone_opaline_delta',
+    name: 'Delta Bioluminescent d’Opalia',
+    regionCode: 'REG-04 • XÉNOBOTANIQUE',
+    arrivalPortName: 'Terrasse des Spores d’Opale',
+    continentName: 'Bassin Équatorial d’Améthyste',
+    latDeg: 8,
+    lonDeg: -122,
+    presetId: 'neon_alien',
+    reliefScale: 1.35,
+    seedSuffix: 'OPALIA-DELTA-04',
+    strategicBonus: '+20% Influence & Biotechnologie Impériale',
+    description:
+      'Plateau équatorial baigné de lagons luminescents où prospèrent des jardins suspendus et des laboratoires d’exobiologie.',
+    beaconColor: '#e879f9',
+    initialBuildings: [
+      {
+        id: 'bld_opalia_green',
+        buildingType: bld_TYPE_GREENHOUSE,
+        name: 'Jardins Suspendus d’Opalia',
+        description: 'Terrasses agronomiques cultivant des espèces bioluminescentes rares.',
+        x: -3.5,
+        z: -4.0,
+        rotation: 0.3,
+        scale: 1.1,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_opalia_dome',
+        buildingType: bld_TYPE_BIO_DOME,
+        name: 'Grand Biodôme Mycologique',
+        description: 'Centre d’étude symbiotique des écosystèmes équatoriaux.',
+        x: 6.8,
+        z: 3.2,
+        rotation: -0.5,
+        scale: 1.05,
+        assembledAt: 0,
+      },
+    ],
+  },
+  {
+    id: 'zone_meridian_isthmus',
+    name: 'Isthme des Méridiens Dorés',
+    regionCode: 'REG-05 • COMMERCE',
+    arrivalPortName: 'Port Franc des Galions Célestes',
+    continentName: 'Péninsule Orientale de Cygnus',
+    latDeg: 32,
+    lonDeg: 138,
+    presetId: 'terra_blue',
+    reliefScale: 1.25,
+    seedSuffix: 'MERIDIAN-ISTHMUS-05',
+    strategicBonus: '+20% Prospérité & Échanges Intercontinentaux',
+    description:
+      'Carrefour maritime et aérien stratégique reliant les mers orientales, célèbre pour ses cités franches et ses jardins en terrasses.',
+    beaconColor: '#34d399',
+    initialBuildings: [
+      {
+        id: 'bld_merid_hab1',
+        buildingType: bld_TYPE_HABITAT,
+        name: 'Palais Consulaire des Marchands',
+        description: 'Centre diplomatique régulant les flottes commerciales de la planète.',
+        x: -5.0,
+        z: -3.5,
+        rotation: 0.25,
+        scale: 1.08,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_merid_green',
+        buildingType: bld_TYPE_GREENHOUSE,
+        name: 'Terrasses Vivrières du Détroit',
+        description: 'Approvisionne les convois transitant par la Porte d’Arrivée.',
+        x: 6.2,
+        z: 4.0,
+        rotation: -0.35,
+        scale: 1.0,
+        assembledAt: 0,
+      },
+    ],
+  },
+  {
+    id: 'zone_austral_bastion',
+    name: 'Bastion des Falaises Australes',
+    regionCode: 'REG-06 • SENTINELLE',
+    arrivalPortName: 'Citadelle d’Approche Australe',
+    continentName: 'Cap Méridional d’Acier',
+    latDeg: -42,
+    lonDeg: -18,
+    presetId: 'glacial_aurora',
+    reliefScale: 1.68,
+    seedSuffix: 'AUSTRAL-BASTION-06',
+    strategicBonus: '+20% Stabilité & Vigie Orbitale',
+    description:
+      'Promontoire escarpé dominant l’océan austral, garant de la sécurité orbitale et des phares de navigation planétaire.',
+    beaconColor: '#60a5fa',
+    initialBuildings: [
+      {
+        id: 'bld_austral_obs',
+        buildingType: bld_TYPE_OBSERVATION,
+        name: 'Vigie Méridionale du Cap',
+        description: 'Surveille les trajectoires orbitales de l’hémisphère sud.',
+        x: 0,
+        z: -5.5,
+        rotation: 0.0,
+        scale: 1.1,
+        assembledAt: 0,
+      },
+      {
+        id: 'bld_austral_relay',
+        buildingType: bld_TYPE_RELAY_TOWER,
+        name: 'Phare Magnétique Austral',
+        description: 'Guide les vaisseaux à travers les tempêtes australes.',
+        x: 7.5,
+        z: 2.0,
+        rotation: 0.5,
+        scale: 1.05,
+        assembledAt: 0,
+      },
+    ],
+  },
+] as const;
+
+export function getPlanetaryZoneById(zoneId: string): PlanetaryZoneDefinition {
+  return PLANETARY_ZONES.find((z) => z.id === zoneId) ?? PLANETARY_ZONES[0];
+}
+
+export function buildInitialZonesRuntimeMap(): Record<string, PlanetaryZoneRuntimeState> {
+  const map: Record<string, PlanetaryZoneRuntimeState> = {};
+  PLANETARY_ZONES.forEach((zone, index) => {
+    map[zone.id] = {
+      zoneId: zone.id,
+      buildings: [...zone.initialBuildings],
+      npcs: buildStarterNpcs(index === 0 ? 4 : 3),
+      convoysReceived: 1,
+    };
+  });
+  return map;
+}
