@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import {
   activePresetAtom,
@@ -42,7 +42,6 @@ import { ColonistAssignmentModal } from './components/modals/ColonistAssignmentM
 import { NpcInspectorModal } from './components/inspectors/NpcInspectorModal';
 import { BuildingInspectorModal } from './components/inspectors/BuildingInspectorModal';
 import { ArrivalZoneInspectorModal } from './components/inspectors/ArrivalZoneInspectorModal';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,7 +52,7 @@ const queryClient = new QueryClient({
   },
 });
 
-export default function App() {
+function MainApp() {
   const directorRef = useRef<SceneDirector | null>(null);
 
   const worldName = useAtomValue(worldNameAtom);
@@ -154,43 +153,49 @@ export default function App() {
   };
 
   return (
+    <main className="relative w-screen h-dvh overflow-hidden bg-[#070d19] text-slate-100 select-none">
+      {/* 3D WebGL Scene */}
+      <TerrariumMount directorRef={directorRef} />
+
+      {/* Minimalist Top Header with Non-Floating Docked Resources */}
+      <TopTelemetryBar />
+
+      {/* 3D Globe Direct-Click Zone Entry Window & Optional Atlas Drawer */}
+      <PlanetaryZonesPanel onTriggerShuttleLanding={handleTriggerShuttleLanding} />
+
+      {/* Entity & Arrival Port Inspectors */}
+      <NpcInspectorModal />
+      <BuildingInspectorModal />
+      <ArrivalZoneInspectorModal onTriggerShuttleLanding={handleTriggerShuttleLanding} />
+
+      {/* Collapsible Bottom Control Dock */}
+      <BottomControlDock onTriggerTurnEvent={handleTriggerTurnEvent} />
+
+      {/* Modals & Dialogs */}
+      <EventDialog />
+      <EventJournalModal />
+      <ResourceLedgerModal />
+      <ColonistAssignmentModal />
+      <SectorPresetsModal />
+      <WorldSettingsModal />
+      <SaveManagerModal />
+      <GameConfigModal />
+      <RpgCatalogsAndArchitectModal />
+      <BlueprintArchitectureModal />
+
+      {/* 3-Stage Cinematic 3D Boot -> Mandatory Google Firebase Auth -> Imperial Main Menu */}
+      <BootSequenceScreen />
+
+      {/* TanStack Query Devtools */}
+      <ReactQueryDevtools initialIsOpen={false} position="bottom" />
+    </main>
+  );
+}
+
+export default function App() {
+  return (
     <QueryClientProvider client={queryClient}>
-      <main className="relative w-screen h-dvh overflow-hidden bg-[#070d19] text-slate-100 select-none">
-        {/* 3D WebGL Scene */}
-        <TerrariumMount directorRef={directorRef} />
-
-        {/* Minimalist Top Header with Non-Floating Docked Resources */}
-        <TopTelemetryBar />
-
-        {/* 3D Globe Direct-Click Zone Entry Window & Optional Atlas Drawer */}
-        <PlanetaryZonesPanel onTriggerShuttleLanding={handleTriggerShuttleLanding} />
-
-        {/* Entity & Arrival Port Inspectors */}
-        <NpcInspectorModal />
-        <BuildingInspectorModal />
-        <ArrivalZoneInspectorModal onTriggerShuttleLanding={handleTriggerShuttleLanding} />
-
-        {/* Collapsible Bottom Control Dock */}
-        <BottomControlDock onTriggerTurnEvent={handleTriggerTurnEvent} />
-
-        {/* Modals & Dialogs */}
-        <EventDialog />
-        <EventJournalModal />
-        <ResourceLedgerModal />
-        <ColonistAssignmentModal />
-        <SectorPresetsModal />
-        <WorldSettingsModal />
-        <SaveManagerModal />
-        <GameConfigModal />
-        <RpgCatalogsAndArchitectModal />
-        <BlueprintArchitectureModal />
-
-        {/* 3-Stage Cinematic 3D Boot -> Mandatory Google Firebase Auth -> Imperial Main Menu */}
-        <BootSequenceScreen />
-
-        {/* TanStack Query Devtools */}
-        <ReactQueryDevtools initialIsOpen={false} position="bottom" />
-      </main>
+      <MainApp />
     </QueryClientProvider>
   );
 }
