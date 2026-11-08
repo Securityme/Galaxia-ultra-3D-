@@ -6,6 +6,7 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    assetsInclude: ['**/*.wasm'],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -13,6 +14,7 @@ export default defineConfig(() => {
     },
     build: {
       chunkSizeWarningLimit: 1600,
+      target: 'esnext',
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

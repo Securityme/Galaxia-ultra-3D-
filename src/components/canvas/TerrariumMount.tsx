@@ -9,11 +9,19 @@ import {
   cameraModeAtom,
   celestialAutoCycleAtom,
   celestialTimeAtom,
+  globeZoneClickSignalAtom,
+  graphicsQualityPresetAtom,
   isArrivalZoneSelectedAtom,
   isBootScreenOpenAtom,
+  npcAssignmentsMapAtom,
   npcsAtom,
+  reducedMotionAtom,
   reliefScaleAtom,
+  activeWeatherTypeAtom,
+  architectSandboxTypeAtom,
+  renderPerfMetricsAtom,
   selectedBuildingIdAtom,
+  selectedGlobeZoneIdAtom,
   selectedNpcIdAtom,
   worldSeedAtom,
   worldViewModeAtom,
@@ -44,16 +52,24 @@ export const TerrariumMount: React.FC<TerrariumMountProps> = ({ directorRef }) =
   const ambience = useAtomValue(ambienceOverrideAtom);
   const buildings = useAtomValue(buildingsAtom);
   const npcs = useAtomValue(npcsAtom);
+  const npcAssignments = useAtomValue(npcAssignmentsMapAtom);
   const selectedNpcId = useAtomValue(selectedNpcIdAtom);
   const selectedBuildingId = useAtomValue(selectedBuildingIdAtom);
   const isArrivalZoneSelected = useAtomValue(isArrivalZoneSelectedAtom);
+  const architectSandboxType = useAtomValue(architectSandboxTypeAtom);
+  const graphicsQualityPreset = useAtomValue(graphicsQualityPresetAtom);
+  const reducedMotion = useAtomValue(reducedMotionAtom);
 
   const setSelectedNpcId = useSetAtom(selectedNpcIdAtom);
   const setSelectedBuildingId = useSetAtom(selectedBuildingIdAtom);
   const setIsArrivalZoneSelected = useSetAtom(isArrivalZoneSelectedAtom);
+  const setSelectedGlobeZoneId = useSetAtom(selectedGlobeZoneIdAtom);
+  const setGlobeZoneClickSignal = useSetAtom(globeZoneClickSignalAtom);
   const setActiveZoneId = useSetAtom(activeZoneIdAtom);
   const setPresetId = useSetAtom(activePresetIdAtom);
   const setReliefScale = useSetAtom(reliefScaleAtom);
+  const setRenderPerfMetrics = useSetAtom(renderPerfMetricsAtom);
+  const setActiveWeather = useSetAtom(activeWeatherTypeAtom);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -64,11 +80,19 @@ export const TerrariumMount: React.FC<TerrariumMountProps> = ({ directorRef }) =
       onSelectBuilding: (id) => setSelectedBuildingId(id),
       onSelectArrivalZone: (selected) => setIsArrivalZoneSelected(selected),
       onSelectPlanetZone: (zoneId) => {
+        if (!zoneId) {
+          setSelectedGlobeZoneId(null);
+          return;
+        }
         const zone = getPlanetaryZoneById(zoneId);
         setActiveZoneId(zone.id);
         setPresetId(zone.presetId);
         setReliefScale(zone.reliefScale);
+        setSelectedGlobeZoneId(zone.id);
+        setGlobeZoneClickSignal((prev) => ({ seq: prev.seq + 1, zoneId: zone.id }));
       },
+      onUpdatePerfMetrics: (metrics) => setRenderPerfMetrics(metrics),
+      onUpdateWeather: (w) => setActiveWeather(w),
     });
 
     internalDirectorRef.current = director;
@@ -86,10 +110,14 @@ export const TerrariumMount: React.FC<TerrariumMountProps> = ({ directorRef }) =
   }, [
     directorRef,
     setActiveZoneId,
+    setGlobeZoneClickSignal,
     setIsArrivalZoneSelected,
     setPresetId,
     setReliefScale,
+    setRenderPerfMetrics,
+    setActiveWeather,
     setSelectedBuildingId,
+    setSelectedGlobeZoneId,
     setSelectedNpcId,
   ]);
 
@@ -110,9 +138,13 @@ export const TerrariumMount: React.FC<TerrariumMountProps> = ({ directorRef }) =
       ambience,
       buildings,
       npcs,
+      npcAssignments,
       selectedNpcId,
       selectedBuildingId,
       isArrivalZoneSelected,
+      architectSandboxType,
+      graphicsQualityPreset,
+      reducedMotion,
     });
   }, [
     isBootScreenOpen,
@@ -127,16 +159,19 @@ export const TerrariumMount: React.FC<TerrariumMountProps> = ({ directorRef }) =
     ambience,
     buildings,
     npcs,
+    npcAssignments,
     selectedNpcId,
     selectedBuildingId,
     isArrivalZoneSelected,
+    graphicsQualityPreset,
+    reducedMotion,
   ]);
 
   return (
     <div
       ref={containerRef}
       className="fixed inset-0 w-full h-full overflow-hidden select-none touch-none z-0"
-      aria-label="Pax Historia 3D World Canvas"
+      aria-label="Galaxia Ultra Bio-Dôme de Poche 3D Canvas"
     />
   );
 };

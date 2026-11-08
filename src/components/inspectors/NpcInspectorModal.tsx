@@ -13,7 +13,9 @@ import {
   X,
 } from 'lucide-react';
 import {
+  assignNpcToBuildingAtom,
   buildingsAtom,
+  npcAssignmentsMapAtom,
   npcsAtom,
   selectedBuildingIdAtom,
   selectedNpcAtom,
@@ -24,20 +26,22 @@ import { GlassPanel } from '../ui/GlassPanel';
 
 /**
  * RPG Character Inspector Card positioned strictly ABOVE the footer and BELOW the header.
- * Displays Noble House, Outfit, Home Residence, Work Assignment, 5 Aptitude Scores,
+ * Displays Noble House, Outfit, Interactive Home/Work Building Assignment, 5 Aptitude Scores,
  * Skills, Bonus/Malus Traits, and Relational Links.
  */
 export const NpcInspectorModal: React.FC = () => {
   const npc = useAtomValue(selectedNpcAtom);
   const buildings = useAtomValue(buildingsAtom);
   const allNpcs = useAtomValue(npcsAtom);
+  const customAssignments = useAtomValue(npcAssignmentsMapAtom);
 
+  const assignNpc = useSetAtom(assignNpcToBuildingAtom);
   const setSelectedNpcId = useSetAtom(selectedNpcIdAtom);
   const setSelectedBuildingId = useSetAtom(selectedBuildingIdAtom);
 
   if (!npc) return null;
 
-  const rpg = resolveNpcRpgProfile(npc, buildings, allNpcs);
+  const rpg = resolveNpcRpgProfile(npc, buildings, allNpcs, customAssignments);
 
   const handleInspectBuilding = (bldId: string | null) => {
     if (!bldId) return;
@@ -46,8 +50,11 @@ export const NpcInspectorModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 w-[min(95vw,760px)] max-h-[calc(100dvh-10.5rem)] overflow-y-auto pointer-events-auto px-1">
-      <GlassPanel className="p-4 sm:p-5 border-sky-300/35 shadow-[0_18px_55px_rgba(0,0,0,0.8)]">
+    <div className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 w-[min(95vw,760px)] pointer-events-auto px-1">
+      <GlassPanel
+        windowId="inspector-npc-window"
+        className="p-4 sm:p-5 max-h-[calc(100dvh-10.5rem)] overflow-y-auto border-sky-300/35 shadow-[0_18px_55px_rgba(0,0,0,0.8)]"
+      >
         {/* Top Row: Identity, Noble House Badge & Close Button */}
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-3">
@@ -93,45 +100,81 @@ export const NpcInspectorModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Middle Grid: Assignments (Maison, Travail, Tenue) + 5 Aptitude Bars */}
+        {/* Middle Grid: Interactive Assignments (Maison, Travail, Tenue) + 5 Aptitude Bars */}
         <div className="mt-3.5 grid grid-cols-1 md:grid-cols-2 gap-3.5">
-          {/* Left Column: House, Outfit, Home & Work Assignments, Bio */}
+          {/* Left Column: House, Outfit, Interactive Home & Work Assignments, Bio */}
           <div className="space-y-2 text-xs">
-            <div className="rounded-xl bg-white/[0.03] border border-white/10 p-2.5 space-y-1.5">
+            <div className="rounded-xl bg-white/[0.03] border border-white/10 p-2.5 space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400 flex items-center gap-1.5">
+                <span className="text-slate-400 flex items-center gap-1.5 shrink-0">
                   <Home className="w-3.5 h-3.5 text-amber-300" />
                   Domicile :
                 </span>
-                <button
-                  type="button"
-                  disabled={!rpg.homeBuildingId}
-                  onClick={() => handleInspectBuilding(rpg.homeBuildingId)}
-                  className="font-medium text-amber-200 hover:underline disabled:no-underline cursor-pointer truncate max-w-[210px]"
-                >
-                  {rpg.homeBuildingName}
-                </button>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <select
+                    value={rpg.homeBuildingId ?? ''}
+                    onChange={(e) =>
+                      assignNpc({
+                        npcId: npc.id,
+                        homeBuildingId: e.target.value,
+                      })
+                    }
+                    className="rounded-lg border border-amber-300/30 bg-slate-900/90 px-2 py-1 text-[11px] text-amber-100 max-w-[175px]"
+                  >
+                    {buildings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!rpg.homeBuildingId}
+                    onClick={() => handleInspectBuilding(rpg.homeBuildingId)}
+                    className="text-[10px] font-mono text-amber-300 underline cursor-pointer shrink-0"
+                  >
+                    Voir
+                  </button>
+                </div>
               </div>
 
               <div className="flex items-center justify-between gap-2">
-                <span className="text-slate-400 flex items-center gap-1.5">
+                <span className="text-slate-400 flex items-center gap-1.5 shrink-0">
                   <Briefcase className="w-3.5 h-3.5 text-sky-300" />
                   Travail :
                 </span>
-                <button
-                  type="button"
-                  disabled={!rpg.workBuildingId}
-                  onClick={() => handleInspectBuilding(rpg.workBuildingId)}
-                  className="font-medium text-sky-200 hover:underline disabled:no-underline cursor-pointer truncate max-w-[210px]"
-                >
-                  {rpg.workBuildingName}
-                </button>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <select
+                    value={rpg.workBuildingId ?? ''}
+                    onChange={(e) =>
+                      assignNpc({
+                        npcId: npc.id,
+                        workBuildingId: e.target.value,
+                      })
+                    }
+                    className="rounded-lg border border-sky-300/30 bg-slate-900/90 px-2 py-1 text-[11px] text-sky-100 max-w-[175px]"
+                  >
+                    {buildings.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!rpg.workBuildingId}
+                    onClick={() => handleInspectBuilding(rpg.workBuildingId)}
+                    className="text-[10px] font-mono text-sky-300 underline cursor-pointer shrink-0"
+                  >
+                    Voir
+                  </button>
+                </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center justify-between gap-2 pt-1 border-t border-white/10">
                 <span className="text-slate-400 flex items-center gap-1.5">
                   <Shirt className="w-3.5 h-3.5 text-purple-300" />
-                  Tenue 3D :
+                  Tenue 3D PBR :
                 </span>
                 <span className="text-purple-200 font-medium truncate max-w-[210px]">
                   {rpg.outfit.name}

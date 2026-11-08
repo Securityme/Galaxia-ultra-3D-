@@ -1,19 +1,41 @@
+/**
+ * GALAXIA ULTRA • Bio-Dôme de Poche // Master 3D WebGL Director (Blender-Grade Pipeline v6.0.0)
+ * Integrates:
+ * - Vague A (PT-17, PT-18, PT-19): EffectComposer + Controlled UnrealBloomPass + Vignette/Grain ShaderPass
+ * - Vague B (PT-20, PT-21): Sobel Normal Maps, Biome Roughness Maps & Entity PBR Textures
+ * - Vague C (PT-22, PT-23, PT-24): Cosmic Equirectangular HDRI via PMREMGenerator & Deterministic Solar Rig
+ * - Vague F (PT-31, PT-32): Quality Presets (Cinéma / Équilibré / Performance), prefers-reduced-motion gating & GPU Perf Telemetry
+ */
+
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import {
+  BuildingType,
   CameraMode,
   WeatherType,
   WorldViewMode,
+  cam_GESTURE_PAN_SENSITIVITY,
+  cam_GESTURE_PINCH_SENSITIVITY,
+  cam_GESTURE_ROTATE_SENSITIVITY,
+  cam_GESTURE_TAP_THRESHOLD,
+  cam_GESTURE_TWIST_SENSITIVITY,
   cam_MODE_ARRIVAL,
   cam_MODE_GLOBE,
+  cam_MODE_ORBIT,
+  evt_TICK_INTERVAL_SEC,
   view_MODE_PLANET_3D,
+  view_MODE_PLATEAU,
   wld_CELESTIAL_CYCLE_RATE,
   wtr_CALM,
 } from '../config/constants';
 import { PlacedBuilding, PlacedNpc, WorldPreset } from '../contracts/schemas';
 import { DEFAULT_PRESET } from '../config/presets';
 import { DEFAULT_GAME_CONFIG } from '../config/gameDefaults';
-import { AmbienceOverride } from '../stores/worldStore';
+import { CustomNpcAssignment } from '../config/rpgCatalogs';
+import {
+  AmbienceOverride,
+  GraphicsQualityMode,
+  RenderPerfMetrics,
+} from '../stores/worldStore';
 import { configureTerrain } from '../core/terrainMath';
 import {
   createSpaceEnvironment,
@@ -27,7 +49,20 @@ import { createAtmosphericParticles, AtmosphericParticles } from './world/partic
 import { createWeatherSystem, WeatherSystemManager } from './world/weatherSystem';
 import { createBuildingsManager, BuildingsManager } from './entities/buildings';
 import { createNpcManager, NpcManager } from './entities/npcs';
+import { createArchitectHologramManager, ArchitectHologramManager } from './world/architectHologram';
 import { createCameraRig, CameraRig } from './camera/cameraRig';
+import {
+  BlenderPostPipeline,
+  createBlenderPostPipeline,
+} from './postfx/blenderComposer';
+import {
+  buildCosmicEnvironmentScene,
+  lgt_COSMIC_ENV_BLUR,
+} from './lighting/cosmicEnvironment';
+import {
+  createQualityDirector,
+  QualityDirector,
+} from './quality/qualityDirector';
 
 export interface SceneDirectorState {
   isBootScreenOpen: boolean;
@@ -42,32 +77,33 @@ export interface SceneDirectorState {
   ambience: AmbienceOverride | null;
   buildings: PlacedBuilding[];
   npcs: PlacedNpc[];
+  npcAssignments: Record<string, CustomNpcAssignment>;
   selectedNpcId: string | null;
   selectedBuildingId: string | null;
   isArrivalZoneSelected: boolean;
+  architectSandboxType?: BuildingType | null;
+  graphicsQualityPreset: GraphicsQualityMode;
+  reducedMotion: boolean;
 }
 
 export interface SceneDirectorCallbacks {
   onSelectNpc: (id: string | null) => void;
   onSelectBuilding: (id: string | null) => void;
   onSelectArrivalZone: (selected: boolean) => void;
-  onSelectPlanetZone: (zoneId: string) => void;
+  onSelectPlanetZone: (zoneId: string | null) => void;
+  onUpdatePerfMetrics?: (metrics: RenderPerfMetrics) => void;
+  onUpdateWeather?: (weather: WeatherType) => void;
+  onChangeCameraMode?: (mode: CameraMode) => void;
+  onChangeWorldViewMode?: (mode: WorldViewMode) => void;
 }
 
-/**
- * Master 3D WebGL Director for Pax Historia 3D.
- * Supports:
- * - Cinematic 3D Orbital Planet + Flagship Arrival during Boot, Auth & Main Menu
- * - 1-finger swipe to advance Forward/Backward/Left/Right across the curved plateau
- * - 2-finger twist (rotation en sens inverse) + 2-finger tilt + pinch zoom
- * - Organic 3D Urban Districts & RPG GLTF/Articulated NPCs
- */
 export class SceneDirector {
   private container: HTMLElement;
   private renderer: THREE.WebGLRenderer;
   private scene: THREE.Scene;
   private pmremGenerator: THREE.PMREMGenerator;
   private envMapRT: THREE.WebGLRenderTarget;
+  private postPipeline: BlenderPostPipeline;
 
   private spaceEnv: SpaceEnvironment;
   private plateauTerrain: PlateauTerrain;
@@ -77,10 +113,13 @@ export class SceneDirector {
   private weatherSystem: WeatherSystemManager;
   private buildingsManager: BuildingsManager;
   private npcManager: NpcManager;
+  private architectHologram: ArchitectHologramManager;
   private cameraRig: CameraRig;
+  private qualityDirector: QualityDirector;
 
   private callbacks: SceneDirectorCallbacks;
   private state: SceneDirectorState | null = null;
+  private lastNotifiedWeather: WeatherType | null = null;
 
   private animationFrameId: number | null = null;
   private clock = new THREE.Clock();
@@ -99,10 +138,13 @@ export class SceneDirector {
   private lastTwoTouchAngle: number | null = null;
   private lastTwoTouchMid: { x: number; y: number } | null = null;
 
-  private pressedKeys = new Set<string>();
-
   private lastPlateauKey = '';
   private lastGlobeKey = '';
+  private lastEnvPresetId = '';
+  private perfSampleAccumSec = 0;
+  private perfFrameCount = 0;
+  private fixedTickAccumSec = 0;
+  private tickIndex = 0;
 
   constructor(container: HTMLElement, callbacks: SceneDirectorCallbacks) {
     this.container = container;
@@ -123,6 +165,8 @@ export class SceneDirector {
       : '';
     this.isSoftwareGl = /SwiftShader|Software|llvmpipe/i.test(rendererStr);
 
+    this.qualityDirector = createQualityDirector('cinema', this.isSoftwareGl);
+
     this.renderer.setPixelRatio(
       this.isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
     );
@@ -136,21 +180,29 @@ export class SceneDirector {
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
+    this.scene.name = 'GalaxiaUltra_BioDomeScene';
     this.scene.background = new THREE.Color(DEFAULT_PRESET.fogColor);
     this.scene.fog = new THREE.FogExp2(DEFAULT_PRESET.fogColor, 0.0028);
 
+    // PT-22: Cosmic Equirectangular HDRI Environment via PMREMGenerator
     this.pmremGenerator = new THREE.PMREMGenerator(this.renderer);
     this.pmremGenerator.compileEquirectangularShader();
-    this.envMapRT = this.pmremGenerator.fromScene(new RoomEnvironment(), 0.04);
+    const cosmicEnvScene = buildCosmicEnvironmentScene(DEFAULT_PRESET);
+    this.envMapRT = this.pmremGenerator.fromScene(cosmicEnvScene, lgt_COSMIC_ENV_BLUR);
     this.scene.environment = this.envMapRT.texture;
-    this.scene.environmentIntensity = 0.75;
+    this.scene.environmentIntensity = 0.82;
+    this.lastEnvPresetId = DEFAULT_PRESET.id;
 
     configureTerrain(DEFAULT_GAME_CONFIG.seed, DEFAULT_GAME_CONFIG.reliefScale);
 
     this.spaceEnv = createSpaceEnvironment(DEFAULT_PRESET, DEFAULT_GAME_CONFIG.seed);
     this.scene.add(this.spaceEnv.group);
 
-    this.plateauTerrain = createPlateauTerrain(DEFAULT_PRESET, DEFAULT_GAME_CONFIG.seed);
+    this.plateauTerrain = createPlateauTerrain(
+      DEFAULT_PRESET,
+      DEFAULT_GAME_CONFIG.seed,
+      this.isSoftwareGl
+    );
     this.scene.add(this.plateauTerrain.group);
 
     this.arrivalZone = createArrivalZone3D();
@@ -172,7 +224,20 @@ export class SceneDirector {
     this.weatherSystem = createWeatherSystem();
     this.scene.add(this.weatherSystem.group);
 
+    this.architectHologram = createArchitectHologramManager();
+    this.scene.add(this.architectHologram.group);
+
     this.cameraRig = createCameraRig(width, height);
+
+    // PT-17, PT-18, PT-19: Blender-grade Post-Processing Composer
+    this.postPipeline = createBlenderPostPipeline(
+      this.renderer,
+      this.scene,
+      this.cameraRig.camera,
+      width,
+      height,
+      this.isSoftwareGl
+    );
 
     this.bindEvents();
     this.startLoop();
@@ -181,6 +246,32 @@ export class SceneDirector {
   public syncState(next: SceneDirectorState) {
     const prev = this.state;
     this.state = next;
+
+    // PT-31, PT-32, PT-49 & Lot Alpha (PT-25 / PT-27): Sync Quality Preset & Reduced Motion
+    this.qualityDirector.setPreset(next.graphicsQualityPreset, this.isSoftwareGl);
+    this.postPipeline.setQualityPreset(next.graphicsQualityPreset, next.reducedMotion);
+    this.plateauTerrain.setQualityPreset(next.graphicsQualityPreset, next.reducedMotion);
+    if (!this.isSoftwareGl) {
+      const targetRatio =
+        next.graphicsQualityPreset === 'performance'
+          ? 1
+          : next.graphicsQualityPreset === 'balanced'
+          ? Math.min(window.devicePixelRatio || 1, 1.5)
+          : Math.min(window.devicePixelRatio || 1, 2);
+      if (this.renderer.getPixelRatio() !== targetRatio) {
+        this.renderer.setPixelRatio(targetRatio);
+      }
+    }
+
+    // PT-22: Refresh Cosmic HDRI when planetary biome preset changes
+    if (next.preset.id !== this.lastEnvPresetId) {
+      this.lastEnvPresetId = next.preset.id;
+      const nextCosmicScene = buildCosmicEnvironmentScene(next.preset);
+      const nextRT = this.pmremGenerator.fromScene(nextCosmicScene, lgt_COSMIC_ENV_BLUR);
+      this.envMapRT.dispose();
+      this.envMapRT = nextRT;
+      this.scene.environment = this.envMapRT.texture;
+    }
 
     const globeKey = `${next.seed}_${next.preset.id}`;
     if (globeKey !== this.lastGlobeKey) {
@@ -202,7 +293,9 @@ export class SceneDirector {
         next.isArrivalZoneSelected,
         next.preset.edgeColor
       );
-      this.arrivalZone.triggerLandingAnimation();
+      if (!next.reducedMotion) {
+        this.arrivalZone.triggerLandingAnimation();
+      }
 
       const bg = new THREE.Color(next.preset.fogColor);
       this.scene.background = bg;
@@ -218,7 +311,6 @@ export class SceneDirector {
 
     this.planetGlobe.setActiveZone(next.activeZoneId);
 
-    // During Cinematic Boot / Auth / Main Menu OR when Planet 3D view is selected, show the 3D Planet Globe & Flagship!
     const isPlanet3D =
       next.isBootScreenOpen || next.worldViewMode === view_MODE_PLANET_3D;
 
@@ -228,6 +320,7 @@ export class SceneDirector {
     this.npcManager.group.visible = !isPlanet3D;
     this.particles.group.visible = !isPlanet3D;
     this.weatherSystem.group.visible = !isPlanet3D;
+    this.architectHologram.setBuilding(next.architectSandboxType ?? null, 4.0, 4.0);
     this.planetGlobe.group.visible = isPlanet3D;
 
     if (isPlanet3D) {
@@ -245,7 +338,9 @@ export class SceneDirector {
       prev?.worldViewMode === view_MODE_PLANET_3D ||
       prev?.isBootScreenOpen
     ) {
-      this.arrivalZone.triggerLandingAnimation();
+      if (!next.reducedMotion) {
+        this.arrivalZone.triggerLandingAnimation();
+      }
       this.cameraRig.setMode(
         next.cameraMode === cam_MODE_GLOBE ? cam_MODE_ARRIVAL : next.cameraMode
       );
@@ -255,7 +350,12 @@ export class SceneDirector {
 
     this.plateauTerrain.syncUrbanDistricts(next.buildings);
     this.buildingsManager.sync(next.buildings, next.selectedBuildingId);
-    this.npcManager.sync(next.npcs, next.selectedNpcId, next.buildings);
+    this.npcManager.sync(
+      next.npcs,
+      next.selectedNpcId,
+      next.buildings,
+      next.npcAssignments
+    );
 
     const activeSelection =
       next.selectedBuildingId ||
@@ -293,7 +393,9 @@ export class SceneDirector {
   }
 
   public triggerArrivalShuttleLanding() {
-    this.arrivalZone.triggerLandingAnimation();
+    if (!this.state?.reducedMotion) {
+      this.arrivalZone.triggerLandingAnimation();
+    }
   }
 
   public triggerWeather(weather: WeatherType, durationSec = 45) {
@@ -326,7 +428,6 @@ export class SceneDirector {
     dom.addEventListener('touchend', this.onTouchEnd, { passive: true });
 
     window.addEventListener('keydown', this.onKeyDown);
-    window.addEventListener('keyup', this.onKeyUp);
     window.addEventListener('resize', this.onResize);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
   }
@@ -345,11 +446,14 @@ export class SceneDirector {
     dom.removeEventListener('touchend', this.onTouchEnd);
 
     window.removeEventListener('keydown', this.onKeyDown);
-    window.removeEventListener('keyup', this.onKeyUp);
     window.removeEventListener('resize', this.onResize);
     document.removeEventListener('visibilitychange', this.onVisibilityChange);
   }
 
+  /**
+   * R-PT-59: Clavier directionnel (ZQSD/WASD/Flèches) supprimé pour respecter l'invariant Spectateur Pur.
+   * Seuls subsistent les raccourcis d'accessibilité de vue (1 = Orbite, 2 = Astroport, 3 = Globe, Escape = Désélection).
+   */
   private onKeyDown = (e: KeyboardEvent) => {
     if (
       document.activeElement &&
@@ -357,11 +461,23 @@ export class SceneDirector {
     ) {
       return;
     }
-    this.pressedKeys.add(e.key.toLowerCase());
-  };
+    if (!this.state || this.state.isBootScreenOpen) return;
 
-  private onKeyUp = (e: KeyboardEvent) => {
-    this.pressedKeys.delete(e.key.toLowerCase());
+    if (e.key === '1') {
+      this.callbacks.onChangeWorldViewMode?.(view_MODE_PLATEAU);
+      this.callbacks.onChangeCameraMode?.(cam_MODE_ORBIT);
+    } else if (e.key === '2') {
+      this.callbacks.onChangeWorldViewMode?.(view_MODE_PLATEAU);
+      this.callbacks.onChangeCameraMode?.(cam_MODE_ARRIVAL);
+    } else if (e.key === '3') {
+      this.callbacks.onChangeWorldViewMode?.(view_MODE_PLANET_3D);
+    } else if (e.key === 'Escape') {
+      this.callbacks.onSelectArrivalZone(false);
+      this.callbacks.onSelectNpc(null);
+      this.callbacks.onSelectBuilding(null);
+      this.callbacks.onSelectPlanetZone(null);
+      this.cameraRig.setFocusPoint(null);
+    }
   };
 
   private onContextMenu = (e: Event) => {
@@ -387,11 +503,20 @@ export class SceneDirector {
       this.state?.worldViewMode === view_MODE_PLANET_3D;
 
     if (isPlanet3D) {
-      this.cameraRig.rotateDelta(dx * 0.0065, -dy * 0.0055);
+      this.cameraRig.rotateDelta(
+        dx * cam_GESTURE_ROTATE_SENSITIVITY,
+        -dy * (cam_GESTURE_ROTATE_SENSITIVITY * 0.85)
+      );
     } else if (this.dragButton === 2 || e.altKey) {
-      this.cameraRig.rotateDelta(dx * 0.0065, -dy * 0.0055);
+      this.cameraRig.rotateDelta(
+        dx * cam_GESTURE_ROTATE_SENSITIVITY,
+        -dy * (cam_GESTURE_ROTATE_SENSITIVITY * 0.85)
+      );
     } else {
-      this.cameraRig.panDelta(-dx * 0.055, dy * 0.055);
+      this.cameraRig.panDelta(
+        -dx * cam_GESTURE_PAN_SENSITIVITY,
+        dy * cam_GESTURE_PAN_SENSITIVITY
+      );
     }
   };
 
@@ -404,7 +529,7 @@ export class SceneDirector {
       e.clientX - this.pointerDownPos.x,
       e.clientY - this.pointerDownPos.y
     );
-    if (moveDist < 6 && e.button === 0) {
+    if (moveDist < cam_GESTURE_TAP_THRESHOLD && e.button === 0) {
       this.handleRaycastSelection(e.clientX, e.clientY);
     }
   };
@@ -447,9 +572,15 @@ export class SceneDirector {
       this.lastSingleTouch = { x: t0.clientX, y: t0.clientY };
 
       if (isPlanet3D) {
-        this.cameraRig.rotateDelta(dx * 0.007, -dy * 0.006);
+        this.cameraRig.rotateDelta(
+          dx * cam_GESTURE_ROTATE_SENSITIVITY,
+          -dy * cam_GESTURE_ROTATE_SENSITIVITY
+        );
       } else {
-        this.cameraRig.panDelta(-dx * 0.065, dy * 0.065);
+        this.cameraRig.panDelta(
+          -dx * cam_GESTURE_PAN_SENSITIVITY,
+          dy * cam_GESTURE_PAN_SENSITIVITY
+        );
       }
     } else if (e.touches.length >= 2) {
       const t0 = e.touches[0];
@@ -468,7 +599,7 @@ export class SceneDirector {
         let dAngle = nextAngle - this.lastTwoTouchAngle;
         if (dAngle > Math.PI) dAngle -= Math.PI * 2;
         if (dAngle < -Math.PI) dAngle += Math.PI * 2;
-        this.cameraRig.rotateDelta(dAngle * 1.85, 0);
+        this.cameraRig.rotateDelta(dAngle * cam_GESTURE_TWIST_SENSITIVITY, 0);
       }
 
       if (this.lastTwoTouchMid !== null) {
@@ -478,7 +609,7 @@ export class SceneDirector {
 
       if (this.lastTwoTouchDist !== null) {
         const dDist = this.lastTwoTouchDist - nextDist;
-        this.cameraRig.zoomDelta(dDist * 0.11);
+        this.cameraRig.zoomDelta(dDist * cam_GESTURE_PINCH_SENSITIVITY);
       }
 
       this.lastTwoTouchDist = nextDist;
@@ -494,7 +625,7 @@ export class SceneDirector {
         t0.clientX - this.pointerDownPos.x,
         t0.clientY - this.pointerDownPos.y
       );
-      if (moveDist < 8) {
+      if (moveDist < cam_GESTURE_TAP_THRESHOLD) {
         this.handleRaycastSelection(t0.clientX, t0.clientY);
       }
     }
@@ -514,7 +645,7 @@ export class SceneDirector {
   };
 
   private handleRaycastSelection(clientX: number, clientY: number) {
-    if (!this.state || this.state.isBootScreenOpen) return;
+    if (!this.state) return;
 
     const rect = this.renderer.domElement.getBoundingClientRect();
     const mouse = new THREE.Vector2(
@@ -524,7 +655,11 @@ export class SceneDirector {
 
     this.raycaster.setFromCamera(mouse, this.cameraRig.camera);
 
-    if (this.state.worldViewMode === view_MODE_PLANET_3D) {
+    const isPlanet3D =
+      this.state.isBootScreenOpen ||
+      this.state.worldViewMode === view_MODE_PLANET_3D;
+
+    if (isPlanet3D) {
       const zoneTargets = this.planetGlobe.getInteractiveZoneMarkers();
       const zoneHits = this.raycaster.intersectObjects(zoneTargets, true);
       if (zoneHits.length > 0) {
@@ -540,6 +675,9 @@ export class SceneDirector {
           }
           return;
         }
+      }
+      if (!this.state.isBootScreenOpen) {
+        this.callbacks.onSelectPlanetZone(null);
       }
       return;
     }
@@ -584,6 +722,7 @@ export class SceneDirector {
     const height = this.container.clientHeight || window.innerHeight;
     this.renderer.setSize(width, height);
     this.cameraRig.resize(width, height);
+    this.postPipeline.resize(width, height);
   };
 
   private onVisibilityChange = () => {
@@ -593,39 +732,6 @@ export class SceneDirector {
     }
   };
 
-  private updateKeyboardNavigation(dt: number) {
-    if (this.pressedKeys.size === 0) return;
-    const moveSpeed = 24 * dt;
-    const rotSpeed = 1.6 * dt;
-
-    if (
-      this.pressedKeys.has('w') ||
-      this.pressedKeys.has('z') ||
-      this.pressedKeys.has('arrowup')
-    ) {
-      this.cameraRig.panDelta(0, moveSpeed);
-    }
-    if (this.pressedKeys.has('s') || this.pressedKeys.has('arrowdown')) {
-      this.cameraRig.panDelta(0, -moveSpeed);
-    }
-    if (
-      this.pressedKeys.has('a') ||
-      this.pressedKeys.has('q') ||
-      this.pressedKeys.has('arrowleft')
-    ) {
-      this.cameraRig.panDelta(-moveSpeed, 0);
-    }
-    if (this.pressedKeys.has('d') || this.pressedKeys.has('arrowright')) {
-      this.cameraRig.panDelta(moveSpeed, 0);
-    }
-    if (this.pressedKeys.has('e')) {
-      this.cameraRig.rotateDelta(rotSpeed, 0);
-    }
-    if (this.pressedKeys.has('r')) {
-      this.cameraRig.rotateDelta(-rotSpeed, 0);
-    }
-  }
-
   private startLoop() {
     const tick = () => {
       this.animationFrameId = requestAnimationFrame(tick);
@@ -634,11 +740,19 @@ export class SceneDirector {
       const dt = Math.min(this.clock.getDelta(), 0.1);
       const elapsed = this.clock.getElapsedTime();
 
-      this.updateKeyboardNavigation(dt);
+      // PT-47: Fixed-tick 10 Hz deterministic accumulator (0.1s per tick)
+      this.fixedTickAccumSec += dt;
+      while (this.fixedTickAccumSec >= evt_TICK_INTERVAL_SEC) {
+        this.fixedTickAccumSec -= evt_TICK_INTERVAL_SEC;
+        if (!this.state.reducedMotion) {
+          this.tickIndex += 1;
+        }
+      }
 
-      const celestialTime = this.state.autoCycleTime
-        ? (this.state.celestialTime + elapsed * wld_CELESTIAL_CYCLE_RATE * 0.2) % 1.0
-        : this.state.celestialTime;
+      const celestialTime =
+        this.state.autoCycleTime && !this.state.reducedMotion
+          ? (this.state.celestialTime + this.tickIndex * evt_TICK_INTERVAL_SEC * wld_CELESTIAL_CYCLE_RATE * 0.2) % 1.0
+          : this.state.celestialTime;
 
       updateSpaceEnvironment(
         this.spaceEnv,
@@ -648,17 +762,35 @@ export class SceneDirector {
         dt
       );
 
+      const isPlanet3D =
+        this.state.isBootScreenOpen ||
+        this.state.worldViewMode === view_MODE_PLANET_3D;
+
       if (this.state.isBootScreenOpen) {
-        // Gentle orbital rotation around the 3D planet during Cinematic Boot & Main Menu
-        this.cameraRig.rotateDelta(dt * 0.08, 0);
+        if (!this.state.reducedMotion) {
+          this.cameraRig.rotateDelta(dt * 0.08, 0);
+        }
         this.planetGlobe.update(elapsed, dt, true);
-      } else if (this.state.worldViewMode === view_MODE_PLANET_3D) {
+      } else if (isPlanet3D) {
         this.planetGlobe.update(elapsed, dt, false);
       } else {
-        this.plateauTerrain.updateWaterAnimation(elapsed);
+        const sunDir = this.spaceEnv.dirLight.position.clone().normalize();
+        this.plateauTerrain.updateWaterAnimation(
+          elapsed,
+          celestialTime,
+          sunDir,
+          this.cameraRig.camera.position,
+          this.tickIndex,
+          isPlanet3D
+        );
         this.arrivalZone.update(elapsed, dt);
         this.buildingsManager.update(elapsed, dt);
-        this.npcManager.update(elapsed, dt, this.state.buildings);
+        this.npcManager.update(
+          elapsed,
+          dt,
+          this.state.buildings,
+          this.state.npcAssignments
+        );
         this.particles.update(
           elapsed,
           dt,
@@ -669,12 +801,51 @@ export class SceneDirector {
           elapsed,
           dt,
           this.state.buildings,
-          this.state.preset.edgeColor
+          this.state.preset,
+          isPlanet3D
         );
+        this.architectHologram.update(elapsed);
+        const curWeather = this.weatherSystem.getActiveWeather();
+        if (curWeather !== this.lastNotifiedWeather) {
+          this.lastNotifiedWeather = curWeather;
+          this.callbacks.onUpdateWeather?.(curWeather);
+        }
       }
 
       this.cameraRig.update(dt);
-      this.renderer.render(this.scene, this.cameraRig.camera);
+      this.postPipeline.render(elapsed);
+
+      // PT-32 & PT-49: Record frame in Adaptive Quality Director & sample GPU telemetry
+      const info = this.renderer.info;
+      const qSnapshot = this.qualityDirector.recordFrame(
+        dt,
+        info.render.calls,
+        info.render.triangles
+      );
+
+      this.perfSampleAccumSec += dt;
+      this.perfFrameCount += 1;
+      if (this.perfSampleAccumSec >= 1.0 && this.callbacks.onUpdatePerfMetrics) {
+        if (
+          !this.isSoftwareGl &&
+          Math.abs(this.renderer.getPixelRatio() - qSnapshot.recommendedPixelRatio) >= 0.1
+        ) {
+          this.renderer.setPixelRatio(qSnapshot.recommendedPixelRatio);
+        }
+
+        const avgFrameMs = (this.perfSampleAccumSec * 1000) / Math.max(1, this.perfFrameCount);
+        const fps = Math.round(this.perfFrameCount / this.perfSampleAccumSec);
+        this.callbacks.onUpdatePerfMetrics({
+          frameTimeMs: Number(avgFrameMs.toFixed(1)),
+          fps,
+          drawCalls: info.render.calls,
+          triangles: info.render.triangles,
+          textures: info.memory.textures,
+          geometries: info.memory.geometries,
+        });
+        this.perfSampleAccumSec = 0;
+        this.perfFrameCount = 0;
+      }
     };
 
     tick();
@@ -685,6 +856,7 @@ export class SceneDirector {
       cancelAnimationFrame(this.animationFrameId);
     }
     this.unbindEvents();
+    this.postPipeline.dispose();
     this.spaceEnv.dispose();
     this.plateauTerrain.dispose();
     this.arrivalZone.dispose();

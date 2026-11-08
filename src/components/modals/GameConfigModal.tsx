@@ -18,7 +18,10 @@ import {
   chroniclesAtom,
   isBootScreenOpenAtom,
   isGameConfigModalOpenAtom,
+  pendingEffectsQueueAtom,
   reliefScaleAtom,
+  resourceStocksAtom,
+  turnLedgerAtom,
   turnNumberAtom,
   worldNameAtom,
   worldSeedAtom,
@@ -40,6 +43,8 @@ import {
   wtr_SOLAR_FLARE,
   wtr_STARDUST_DRIFT,
 } from '../../config/constants';
+import { createPRNG } from '../../core/prng';
+import { createInitialResourceStocks } from '../../core/simulation/simulationKernel';
 import { GlassPanel } from '../ui/GlassPanel';
 
 interface SovereignPreset {
@@ -161,9 +166,13 @@ export const GameConfigModal: React.FC = () => {
   const setTurnNumber = useSetAtom(turnNumberAtom);
   const setAmbience = useSetAtom(ambienceOverrideAtom);
   const setChronicles = useSetAtom(chroniclesAtom);
+  const setResourceStocks = useSetAtom(resourceStocksAtom);
+  const setPendingEffects = useSetAtom(pendingEffectsQueueAtom);
+  const setTurnLedger = useSetAtom(turnLedgerAtom);
   const setIsBootScreenOpen = useSetAtom(isBootScreenOpenAtom);
 
   const [step, setStep] = useState<1 | 2>(1);
+  const [seedSalt, setSeedSalt] = useState(1);
 
   // Step 1 State: Sovereign Character
   const [selectedSovPresetId, setSelectedSovPresetId] = useState(SOVEREIGN_PRESETS[0].id);
@@ -194,17 +203,16 @@ export const GameConfigModal: React.FC = () => {
   const handleLaunchNewGame = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanWorldName = draftWorldName.trim() || 'Aethelgard Prime';
-    const cleanSeed = draftSeed.trim() || 'PAX-HISTORIA-77';
+    const cleanSeed = draftSeed.trim() || 'GALAXIA-OMEGA-77';
     const cleanLeaderName = leaderName.trim() || 'Archonte Valerius';
     const weatherPreset =
       WEATHER_PRESETS.find((w) => w.id === draftWeatherId) ?? WEATHER_PRESETS[0];
 
-    // Build fresh multi-zone state and inject the Player's Sovereign Character at the Arrival Zone of the starting plateau!
     const freshZonesMap = buildInitialZonesRuntimeMap();
     const targetZone = freshZonesMap[draftZoneId];
     if (targetZone) {
       const sovereignNpc = {
-        id: `npc_sovereign_${Date.now()}`,
+        id: 'npc_sovereign_t1',
         name: `${cleanLeaderName} (${leaderTitle})`,
         role: npc_ROLE_SOVEREIGN,
         bio: leaderBio,
@@ -214,7 +222,7 @@ export const GameConfigModal: React.FC = () => {
         targetX: 0,
         targetZ: -1.5,
         colorHex: leaderColor,
-        spawnedAt: Date.now(),
+        spawnedAt: 1000,
       };
       targetZone.npcs = [
         sovereignNpc,
@@ -229,6 +237,9 @@ export const GameConfigModal: React.FC = () => {
     setReliefScale(draftRelief);
     setZonesMap(freshZonesMap);
     setTurnNumber(1);
+    setResourceStocks(createInitialResourceStocks());
+    setPendingEffects([]);
+    setTurnLedger([]);
 
     setAmbience({
       weatherEffect: weatherPreset.id,
@@ -239,9 +250,10 @@ export const GameConfigModal: React.FC = () => {
 
     setChronicles([
       {
-        id: `chr_init_${Date.now()}`,
-        timestamp: Date.now(),
+        id: 'chr_init_t1',
+        timestamp: 1000,
         turnNumber: 1,
+        category: 'FONDATION',
         title: `Avènement de ${cleanLeaderName} sur ${cleanWorldName}`,
         narrative: `Sous le titre de « ${leaderTitle} », ${cleanLeaderName} inaugure la Porte Céleste du plateau de départ sous un climat « ${weatherPreset.name} ».`,
         chosenChoiceLabel: 'Proclamer la Charte de Fondation Planétaire',
@@ -249,6 +261,8 @@ export const GameConfigModal: React.FC = () => {
           `Souverain : ${cleanLeaderName}`,
           `Météo : ${weatherPreset.name}`,
         ],
+        economicDeltasSummary: [],
+        causalRefs: ['npc_sovereign_t1'],
       },
     ]);
 
@@ -427,15 +441,15 @@ export const GameConfigModal: React.FC = () => {
                   </div>
                   <button
                     type="button"
-                    onClick={() =>
-                      setDraftSeed(
-                        `PAX-${Math.floor(100 + Math.random() * 900)}-${Math.floor(
-                          10 + Math.random() * 89
-                        )}`
-                      )
-                    }
+                    onClick={() => {
+                      const rng = createPRNG(`${draftSeed}_${seedSalt}`);
+                      const a = Math.floor(100 + rng() * 900);
+                      const b = Math.floor(10 + rng() * 89);
+                      setSeedSalt((prev) => prev + 1);
+                      setDraftSeed(`GALAXIA-${a}-${b}`);
+                    }}
                     className="rounded-xl border border-amber-300/30 bg-amber-400/15 px-3 py-2 text-xs font-medium text-amber-200 hover:bg-amber-400/25 transition cursor-pointer"
-                    title="Graine aléatoire"
+                    title="Graine déterministe suivante"
                   >
                     <RefreshCw className="w-4 h-4" />
                   </button>

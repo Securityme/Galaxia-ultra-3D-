@@ -228,7 +228,7 @@ export function createSpaceEnvironment(
 export function updateSpaceEnvironment(
   env: SpaceEnvironment,
   celestialTime: number,
-  _preset: WorldPreset,
+  preset: WorldPreset,
   ambience: AmbienceOverride | null,
   delta: number
 ): void {
@@ -241,12 +241,18 @@ export function updateSpaceEnvironment(
     Math.sin(angle) * radius
   );
 
-  const baseIntensity = ambience?.lightIntensity ?? 2.0;
+  const baseIntensity = ambience?.lightIntensity ?? preset.sunLightIntensity ?? 2.15;
   const dayFactor = Math.max(0.45, (Math.sin(angle) + 1) * 0.5);
-  env.dirLight.intensity = baseIntensity * (0.7 + dayFactor * 0.35);
+  env.dirLight.intensity = baseIntensity * (0.72 + dayFactor * 0.36);
 
   if (ambience?.skyTint) {
     env.dirLight.color.set(ambience.skyTint);
+  } else if (preset.climateEffectType === 'snow_ice') {
+    env.dirLight.color.set('#f0f9ff');
+  } else if (preset.climateEffectType === 'volcanic_magma') {
+    env.dirLight.color.set('#ffedd5');
+  } else if (preset.climateEffectType === 'desert_sun' || preset.climateEffectType === 'very_sunny') {
+    env.dirLight.color.set('#fffbeb');
   } else {
     env.dirLight.color.set(dayFactor < 0.5 ? '#fde68a' : '#fffaf0');
   }

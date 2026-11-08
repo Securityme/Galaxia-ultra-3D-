@@ -6,13 +6,31 @@ import {
   getLocalReliefElevation,
   getTerrainHeight,
 } from '../../core/terrainMath';
+import { createPRNG } from '../../core/prng';
 import { npc_ROLE_SOVEREIGN } from '../../config/constants';
-import { resolveNpcRpgProfile } from '../../config/rpgCatalogs';
+import {
+  CustomNpcAssignment,
+  resolveNpcRpgProfile,
+} from '../../config/rpgCatalogs';
+import {
+  createBronzeFiligreeTexture,
+  createNpcGarmentTexture,
+} from '../textures/proceduralTextures';
 
 export interface NpcManager {
   group: THREE.Group;
-  sync: (npcs: PlacedNpc[], selectedId: string | null, buildings?: PlacedBuilding[]) => void;
-  update: (time: number, dt: number, buildings: PlacedBuilding[]) => void;
+  sync: (
+    npcs: PlacedNpc[],
+    selectedId: string | null,
+    buildings?: PlacedBuilding[],
+    customAssignments?: Record<string, CustomNpcAssignment>
+  ) => void;
+  update: (
+    time: number,
+    dt: number,
+    buildings: PlacedBuilding[],
+    customAssignments?: Record<string, CustomNpcAssignment>
+  ) => void;
   getInteractiveMeshes: () => THREE.Object3D[];
   getNpcPosition: (id: string) => THREE.Vector3 | null;
   dispose: () => void;
@@ -53,18 +71,23 @@ const WEB_GLB_CHARACTER_URL =
   'https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/gltf/Soldier.glb';
 
 /**
- * Articulated RPG 3D Citizens & Sovereign Figure with:
+ * Blender-Organized Articulated RPG 3D Citizens & Sovereign Figure with:
  * - Asynchronous Web GLTF/GLB rigged character loader + AnimationMixer (Idle / Walk)
- * - High-detail procedural RPG outfit customization (Noble House colors, Pauldrons, Cape, Crown, Held Accessory)
- * - Commuting AI between assigned Home Residence (Maison) and Work Building (Lieu de Travail)
+ * - Dedicated Brocade Garment & Brushed Bronze PBR Textures (`createNpcGarmentTexture`, `createBronzeFiligreeTexture`)
+ * - Commuting AI between player-assigned Home Residence (Maison) and Work Building (Lieu de Travail)
  */
 export function createNpcManager(): NpcManager {
   const group = new THREE.Group();
-  group.name = 'NpcCitizensGroup';
+  group.name = 'Collection_04_NpcCitizens';
 
+  const npcRng = createPRNG('GALAXIA-NPCS-COMMUTE-V4');
   const nodes = new Map<string, NpcRuntimeNode>();
   let currentBuildings: PlacedBuilding[] = [];
   let cachedNpcs: PlacedNpc[] = [];
+  let currentAssignments: Record<string, CustomNpcAssignment> = {};
+
+  const garmentTex = createNpcGarmentTexture();
+  const bronzeTex = createBronzeFiligreeTexture();
 
   // Web GLB template cache
   let glbTemplateScene: THREE.Group | null = null;
@@ -76,7 +99,6 @@ export function createNpcManager(): NpcManager {
     (gltf) => {
       glbTemplateScene = gltf.scene;
       glbAnimations = gltf.animations || [];
-      // Upgrade existing nodes with the loaded GLTF character mesh
       for (const node of nodes.values()) {
         attachGltfCloneToNode(node);
       }
@@ -120,7 +142,7 @@ export function createNpcManager(): NpcManager {
     try {
       const cloned = SkeletonUtils.clone(glbTemplateScene) as THREE.Group;
       cloned.scale.setScalar(0.68);
-      cloned.rotation.y = Math.PI; // Soldier.glb faces -Z by default
+      cloned.rotation.y = Math.PI;
 
       const isSovereign = node.data.role === npc_ROLE_SOVEREIGN;
       const tintColor = new THREE.Color(node.data.colorHex || '#38bdf8');
@@ -142,7 +164,6 @@ export function createNpcManager(): NpcManager {
       node.root.add(cloned);
       node.gltfInstanceGroup = cloned;
 
-      // Keep Crown, Cape and House Regalia visible on top of the GLB character
       node.proceduralBodyGroup.visible = false;
       node.crownMesh.visible = isSovereign;
       node.capeMesh.visible = true;
@@ -172,9 +193,13 @@ export function createNpcManager(): NpcManager {
   }
 
   function pickNextDestination(node: NpcRuntimeNode, buildings: PlacedBuilding[]) {
-    // Commute between Assigned Home Building and Work Building from RPG profile!
     if (buildings.length > 0) {
-      const rpg = resolveNpcRpgProfile(node.data, buildings, cachedNpcs);
+      const rpg = resolveNpcRpgProfile(
+        node.data,
+        buildings,
+        cachedNpcs,
+        currentAssignments
+      );
       const targetBldId = node.commuteToWorkNext
         ? rpg.workBuildingId
         : rpg.homeBuildingId;
@@ -182,11 +207,11 @@ export function createNpcManager(): NpcManager {
 
       const targetBld =
         buildings.find((b) => b.id === targetBldId) ??
-        buildings[Math.floor(Math.random() * buildings.length)];
+        buildings[Math.floor(npcRng() * buildings.length)];
 
-      if (targetBld && Math.random() < 0.8) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 2.3 + Math.random() * 2.1;
+      if (targetBld && npcRng() < 0.85) {
+        const angle = npcRng() * Math.PI * 2;
+        const dist = 2.2 + npcRng() * 1.9;
         node.targetX = targetBld.x + Math.cos(angle) * dist;
         node.targetZ = targetBld.z + Math.sin(angle) * dist;
         return;
@@ -194,8 +219,8 @@ export function createNpcManager(): NpcManager {
     }
 
     for (let attempt = 0; attempt < 12; attempt++) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 3.5 + Math.random() * 28;
+      const angle = npcRng() * Math.PI * 2;
+      const radius = 3.5 + npcRng() * 28;
       const tx = Math.cos(angle) * radius;
       const tz = Math.sin(angle) * radius;
       if (getLocalReliefElevation(tx, tz) > 0.08) {
@@ -211,10 +236,12 @@ export function createNpcManager(): NpcManager {
   function sync(
     npcs: PlacedNpc[],
     selectedId: string | null,
-    buildings: PlacedBuilding[] = currentBuildings
+    buildings: PlacedBuilding[] = currentBuildings,
+    customAssignments: Record<string, CustomNpcAssignment> = currentAssignments
   ) {
     currentBuildings = buildings;
     cachedNpcs = npcs;
+    currentAssignments = customAssignments;
     const incomingIds = new Set(npcs.map((n) => n.id));
 
     for (const [id, node] of nodes.entries()) {
@@ -230,17 +257,26 @@ export function createNpcManager(): NpcManager {
     for (const npc of npcs) {
       let node = nodes.get(npc.id);
       const isSovereign = npc.role === npc_ROLE_SOVEREIGN;
-      const rpg = resolveNpcRpgProfile(npc, currentBuildings, npcs);
+      const rpg = resolveNpcRpgProfile(
+        npc,
+        currentBuildings,
+        npcs,
+        currentAssignments
+      );
 
       if (!node) {
         const cloakMat = new THREE.MeshStandardMaterial({
           color: npc.colorHex || rpg.outfit.tunicColor,
+          map: garmentTex,
+          bumpMap: garmentTex,
+          bumpScale: 0.03,
           roughness: 0.42,
           metalness: 0.18,
         });
 
         const trimMat = new THREE.MeshStandardMaterial({
           color: rpg.outfit.trimColor || '#fbbf24',
+          map: bronzeTex,
           emissive: rpg.house.primaryColor,
           emissiveIntensity: 0.28,
           roughness: 0.28,
@@ -386,8 +422,8 @@ export function createNpcManager(): NpcManager {
           targetX: npc.targetX,
           targetZ: npc.targetZ,
           commuteToWorkNext: true,
-          waitTimer: Math.random() * 2,
-          walkPhase: Math.random() * Math.PI * 2,
+          waitTimer: npcRng() * 2,
+          walkPhase: npcRng() * Math.PI * 2,
         };
         nodes.set(npc.id, node);
 
@@ -404,8 +440,16 @@ export function createNpcManager(): NpcManager {
     }
   }
 
-  function update(time: number, dt: number, buildings: PlacedBuilding[]) {
+  function update(
+    time: number,
+    dt: number,
+    buildings: PlacedBuilding[],
+    customAssignments?: Record<string, CustomNpcAssignment>
+  ) {
     currentBuildings = buildings;
+    if (customAssignments) {
+      currentAssignments = customAssignments;
+    }
 
     for (const node of nodes.values()) {
       const dx = node.targetX - node.x;
@@ -437,7 +481,7 @@ export function createNpcManager(): NpcManager {
 
         if (node.waitTimer <= 0) {
           pickNextDestination(node, buildings);
-          node.waitTimer = 1.8 + Math.random() * 3.0;
+          node.waitTimer = 1.8 + npcRng() * 3.0;
         }
       } else {
         const speed = 1.68;

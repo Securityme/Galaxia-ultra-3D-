@@ -1,15 +1,16 @@
 /**
- * PAX HISTORIA 3D • Deep RPG & Encyclopedic Catalogs (Astral Antiquity Style)
+ * GALAXIA ULTRA • Bio-Dôme de Poche • Deep RPG & Economic Catalogs for Both Citizens (NPCs) AND Buildings
  * Includes:
- * - Noble Houses & Dynastic Factions (Maisons Nobles)
- * - 3D Outfits & Attire Catalog (Tenues selon rang et métier)
- * - Character Traits with Civilization Bonuses & Maluses (Traits & Caractéristiques)
- * - 5 Core Aptitude Scores & Skills (Compétences & Points d'Aptitudes)
- * - Home Residence & Work Building Assignments + Relational Graph (Liens Relationnels)
- * - Extended Building & World Wonders Catalog
+ * - 5 Noble Houses & Dynastic Factions
+ * - 6 3D Outfits & Regalia
+ * - Character Traits (Bonus & Malus), 5 Aptitudes, Skills & Relationships
+ * - Deep Building RPG & Economic Profiles (Tiers I-IV, Patron House, 3D Materials,
+ *   Worker Slots, Production & Consumption across Imperial, Material & Technological rsc_ Resources)
+ * - Full Civilization Resource Production & Consumption Ledger Calculator (PT-61)
  */
 
 import {
+  AnyResourceType,
   BuildingType,
   bld_TYPE_BIO_DOME,
   bld_TYPE_GREENHOUSE,
@@ -25,6 +26,21 @@ import {
   npc_ROLE_SOVEREIGN,
 } from './constants';
 import { PlacedBuilding, PlacedNpc } from '../contracts/schemas';
+
+export type ResourceKey = 'stability' | 'prosperity' | 'knowledge' | 'influence';
+export type ExtendedResourceKey = AnyResourceType;
+
+export interface ResourceYieldMap {
+  stability: number;
+  prosperity: number;
+  knowledge: number;
+  influence: number;
+}
+
+export interface CustomNpcAssignment {
+  workBuildingId?: string;
+  homeBuildingId?: string;
+}
 
 /* ==========================================================================
    1. Noble Houses & Dynastic Factions Catalog
@@ -73,7 +89,7 @@ export const NOBLE_HOUSES_CATALOG: NobleHouseDefinition[] = [
     primaryColor: '#34d399',
     secondaryColor: '#064e3b',
     specialty: 'Exobiologie, Terraformation & Jardins Suspendus',
-    lore: 'Gardiens des semences originelles et maîtres des bio-dômes climatiques. Ils façonnent les micro-climats du plateau.',
+    lore: 'Gardiens des semences originelles et maîtres des bio-dômes climatiques. Ils façonnent les sous-biomes du plateau.',
     passiveBonusLabel: '+7% Prospérité • +5% Savoir Biologique',
   },
   {
@@ -158,7 +174,7 @@ export const OUTFIT_CATALOG: OutfitDefinition[] = [
     id: 'outfit_botanist_emerald',
     name: 'Habit de Lin Vivant & Sphère Botanique',
     casteLabel: 'Cercle des Exobiologistes',
-    description: 'Vêtement tissé de fibres bioluminescentes adapté aux micro-climats tropicaux et alpins.',
+    description: 'Vêtement tissé de fibres bioluminescentes adapté aux sous-biomes tropicaux et alpins.',
     tunicColor: '#059669',
     trimColor: '#a7f3d0',
     hasCape: true,
@@ -201,12 +217,7 @@ export interface CharacterTrait {
   name: string;
   polarity: 'bonus' | 'malus';
   description: string;
-  modifiers: {
-    stability?: number;
-    prosperity?: number;
-    knowledge?: number;
-    influence?: number;
-  };
+  modifiers: Partial<ResourceYieldMap>;
   effectBadge: string;
 }
 
@@ -237,7 +248,7 @@ export const TRAITS_CATALOG: CharacterTrait[] = [
   },
   {
     id: 'trait_maitre_terraformeur',
-    name: 'Maître des Micro-Climats',
+    name: 'Maître des Sous-Biomes',
     polarity: 'bonus',
     description: 'Harmonise la flore des plages, plaines et montagnes du plateau.',
     modifiers: { prosperity: 7, knowledge: 4 },
@@ -263,7 +274,7 @@ export const TRAITS_CATALOG: CharacterTrait[] = [
     id: 'trait_perfectionniste_lent',
     name: 'Perfectionnisme Académique',
     polarity: 'malus',
-    description: 'Exige des matériaux d’une pureté rare, ralentissant le trésor.',
+    description: 'Exige des matériaux d’une pureté rare, augmentant l’entretien.',
     modifiers: { knowledge: 4, prosperity: -3 },
     effectBadge: '+4 Savoir • -3 Prospérité',
   },
@@ -286,15 +297,15 @@ export interface NpcRelationshipLink {
   targetName: string;
   targetRole: string;
   relationType: 'Allié Dynastique' | 'Membre de Maison' | 'Mentor Académique' | 'Rival Politique' | 'Vassal Loyal';
-  affinityScore: number; // -100 to +100
+  affinityScore: number;
 }
 
 export interface NpcAptitudes {
-  governance: number; // 1-20
-  erudition: number;  // 1-20
-  industry: number;   // 1-20
-  diplomacy: number;  // 1-20
-  martial: number;    // 1-20
+  governance: number;
+  erudition: number;
+  industry: number;
+  diplomacy: number;
+  martial: number;
 }
 
 export interface NpcSkillItem {
@@ -315,7 +326,7 @@ export interface ResolvedNpcRpgProfile {
   totalAptitudePoints: number;
   skills: NpcSkillItem[];
   traits: CharacterTrait[];
-  loyaltyToSovereign: number; // 0-100%
+  loyaltyToSovereign: number;
   relationships: NpcRelationshipLink[];
 }
 
@@ -329,22 +340,20 @@ function hashString(str: string): number {
 }
 
 /**
- * Deterministically resolves a rich RPG sheet (House, Outfit, Home/Work buildings,
- * Aptitudes, Skills, Bonus/Malus Traits, and Relationships) for any NPC on the plateau.
+ * Resolves a rich RPG sheet for any NPC on the plateau, honoring custom player assignments.
  */
 export function resolveNpcRpgProfile(
   npc: PlacedNpc,
   buildings: PlacedBuilding[],
-  allNpcs: PlacedNpc[]
+  allNpcs: PlacedNpc[],
+  customAssignments?: Record<string, CustomNpcAssignment>
 ): ResolvedNpcRpgProfile {
   const h = hashString(`${npc.id}_${npc.name}_${npc.role}`);
   const isSovereign = npc.role === npc_ROLE_SOVEREIGN;
 
-  // 1. Noble House
   const houseIndex = isSovereign ? 0 : h % NOBLE_HOUSES_CATALOG.length;
   const house = NOBLE_HOUSES_CATALOG[houseIndex];
 
-  // 2. Outfit matched to Role
   let outfit = OUTFIT_CATALOG[1];
   if (isSovereign) {
     outfit = OUTFIT_CATALOG[0];
@@ -356,33 +365,39 @@ export function resolveNpcRpgProfile(
     outfit = OUTFIT_CATALOG[4];
   } else if (npc.role === npc_ROLE_PILOT) {
     outfit = OUTFIT_CATALOG[5];
-  } else if (npc.role === npc_ROLE_CHRONICLER) {
-    outfit = OUTFIT_CATALOG[1];
   }
 
-  // 3. Home Residence & Work Building Assignment
+  const custom = customAssignments?.[npc.id];
+
   const habitats = buildings.filter((b) => b.buildingType === bld_TYPE_HABITAT);
   const workBuildings = buildings.filter((b) => b.buildingType !== bld_TYPE_HABITAT);
 
-  const homeBld =
+  const defaultHomeBld =
     habitats.length > 0
       ? habitats[h % habitats.length]
       : buildings.length > 0
       ? buildings[h % buildings.length]
       : null;
 
+  const homeBld = custom?.homeBuildingId
+    ? buildings.find((b) => b.id === custom.homeBuildingId) ?? defaultHomeBld
+    : defaultHomeBld;
+
   let preferredWorkType: BuildingType = bld_TYPE_OBSERVATION;
   if (npc.role === npc_ROLE_ENGINEER) preferredWorkType = bld_TYPE_RELAY_TOWER;
   else if (npc.role === npc_ROLE_BOTANIST) preferredWorkType = bld_TYPE_GREENHOUSE;
   else if (npc.role === npc_ROLE_RESEARCHER) preferredWorkType = bld_TYPE_BIO_DOME;
 
-  const matchingWork =
+  const defaultWorkBld =
     buildings.find((b) => b.buildingType === preferredWorkType) ??
     (workBuildings.length > 0
       ? workBuildings[(h >> 2) % workBuildings.length]
       : buildings[0] ?? null);
 
-  // 4. Aptitudes (1-20 scale)
+  const matchingWork = custom?.workBuildingId
+    ? buildings.find((b) => b.id === custom.workBuildingId) ?? defaultWorkBld
+    : defaultWorkBld;
+
   const aptitudes: NpcAptitudes = {
     governance: isSovereign ? 19 : 9 + (h % 10),
     erudition:
@@ -405,7 +420,6 @@ export function resolveNpcRpgProfile(
     aptitudes.diplomacy +
     aptitudes.martial;
 
-  // 5. Skills
   const skills: NpcSkillItem[] = [
     {
       name: isSovereign
@@ -424,7 +438,6 @@ export function resolveNpcRpgProfile(
     },
   ];
 
-  // 6. Traits (2 Bonuses + 1 optional Malus for realism)
   const bonusTraits = TRAITS_CATALOG.filter((t) => t.polarity === 'bonus');
   const malusTraits = TRAITS_CATALOG.filter((t) => t.polarity === 'malus');
 
@@ -438,7 +451,6 @@ export function resolveNpcRpgProfile(
     traitMalus,
   ];
 
-  // 7. Relationships with other NPCs on the plateau
   const relationships: NpcRelationshipLink[] = [];
   const others = allNpcs.filter((other) => other.id !== npc.id).slice(0, 3);
   const relTypes: NpcRelationshipLink['relationType'][] = [
@@ -488,7 +500,574 @@ export function resolveNpcRpgProfile(
 }
 
 /* ==========================================================================
-   5. Pre-Built Character & Architectural Catalogs (Importable / Spawnable)
+   5. Deep Building RPG, Architectural & Economic Catalog
+   ========================================================================== */
+
+export interface ArchitecturalCatalogEntry {
+  buildingType: BuildingType;
+  title: string;
+  categoryLabel: string;
+  architecturalStyle3D: string;
+  patronHouseId: string;
+  maxWorkers: number;
+  housingCapacity: number;
+  baseProduction: ResourceYieldMap;
+  baseConsumption: ResourceYieldMap;
+  urbanDistrictEffect: string;
+  workforceRole: string;
+  civilizationYield: string;
+  description: string;
+}
+
+export const ARCHITECTURAL_CATALOG: ArchitecturalCatalogEntry[] = [
+  {
+    buildingType: bld_TYPE_OBSERVATION,
+    title: 'Observatoire Astral & Astrolabe',
+    categoryLabel: 'Savoir & Cartographie',
+    architecturalStyle3D: 'Rotonde Corinthienne en Marbre Blanc & Coupole Armillaire d’Or',
+    patronHouseId: 'house_astraea',
+    maxWorkers: 3,
+    housingCapacity: 1,
+    baseProduction: { stability: 2, prosperity: 0, knowledge: 9, influence: 5 },
+    baseConsumption: { stability: 0, prosperity: 3, knowledge: 0, influence: 0 },
+    urbanDistrictEffect: 'Génère un Parvis Académique pavé de marbre clair',
+    workforceRole: npc_ROLE_RESEARCHER,
+    civilizationYield: '+9 Savoir • +5 Influence • -3 Prospérité (Entretien)',
+    description: 'Tour néo-classique à colonnade supportant une coupole astronomique et des anneaux armillaires en rotation.',
+  },
+  {
+    buildingType: bld_TYPE_BIO_DOME,
+    title: 'Bio-Dôme Climatique Impérial',
+    categoryLabel: 'Biosphère & Écologie',
+    architecturalStyle3D: 'Arche Géodésique Cristalline & Bassins Botaniques d’Émeraude',
+    patronHouseId: 'house_silvanus',
+    maxWorkers: 3,
+    housingCapacity: 2,
+    baseProduction: { stability: 4, prosperity: 6, knowledge: 7, influence: 2 },
+    baseConsumption: { stability: 0, prosperity: 2, knowledge: 0, influence: 0 },
+    urbanDistrictEffect: 'Crée une Esplanade Botanique avec jardins et bassins',
+    workforceRole: npc_ROLE_BOTANIST,
+    civilizationYield: '+7 Savoir • +6 Prospérité • +4 Stabilité • -2 Entretien',
+    description: 'Verrière géodésique abritant un écosystème pressurisé et régulant les sous-biomes environnants.',
+  },
+  {
+    buildingType: bld_TYPE_RELAY_TOWER,
+    title: 'Obélisque & Tour Relais Solaire',
+    categoryLabel: 'Énergie & Infrastructure',
+    architecturalStyle3D: 'Flèche Héliocentrique en Laiton Poli, Contreforts & Anneaux Plasmiques',
+    patronHouseId: 'house_orion',
+    maxWorkers: 3,
+    housingCapacity: 0,
+    baseProduction: { stability: 3, prosperity: 11, knowledge: 2, influence: 4 },
+    baseConsumption: { stability: 1, prosperity: 0, knowledge: 1, influence: 0 },
+    urbanDistrictEffect: 'Établit un Nœud Énergétique illuminé de lanternes dorées',
+    workforceRole: npc_ROLE_ENGINEER,
+    civilizationYield: '+11 Prospérité • +4 Influence • -1 Stabilité (Surcharge)',
+    description: 'Flèche énergétique captant le rayonnement stellaire pour alimenter tous les édifices de la province.',
+  },
+  {
+    buildingType: bld_TYPE_HABITAT,
+    title: 'Villa Patricienne & Domus Citoyenne',
+    categoryLabel: 'Résidence & Maisons Nobles',
+    architecturalStyle3D: 'Pérystile Néo-Romain à Colonnes Doriques & Toiture Terre Cuite Dorée',
+    patronHouseId: 'house_valerius',
+    maxWorkers: 2,
+    housingCapacity: 5,
+    baseProduction: { stability: 9, prosperity: 3, knowledge: 1, influence: 6 },
+    baseConsumption: { stability: 0, prosperity: 3, knowledge: 0, influence: 0 },
+    urbanDistrictEffect: 'Développe un Quartier Résidentiel Pavé relié au Forum',
+    workforceRole: npc_ROLE_CHRONICLER,
+    civilizationYield: '+9 Stabilité • +6 Influence • -3 Prospérité (Vivres)',
+    description: 'Demeure noble à péristyle et fenêtres chaudement illuminées servant de domicile aux familles et dignitaires.',
+  },
+  {
+    buildingType: bld_TYPE_GREENHOUSE,
+    title: 'Serre Hydroponique d’Abondance',
+    categoryLabel: 'Agriculture & Subsistance',
+    architecturalStyle3D: 'Nef Vitrail en Voûte & Terrasses d’Irrigation Dorées',
+    patronHouseId: 'house_silvanus',
+    maxWorkers: 3,
+    housingCapacity: 1,
+    baseProduction: { stability: 6, prosperity: 9, knowledge: 3, influence: 1 },
+    baseConsumption: { stability: 0, prosperity: 1, knowledge: 1, influence: 0 },
+    urbanDistrictEffect: 'Aménage des Terrasses Agricoles et canaux d’irrigation',
+    workforceRole: npc_ROLE_BOTANIST,
+    civilizationYield: '+9 Prospérité • +6 Stabilité • -1 Savoir (Maintenance)',
+    description: 'Complexe agricole sous voûte cristalline produisant les vivres et élixirs botaniques de la cité.',
+  },
+];
+
+export interface ResolvedBuildingRpgProfile {
+  catalogEntry: ArchitecturalCatalogEntry;
+  patronHouse: NobleHouseDefinition;
+  tier: number;
+  tierLabel: string;
+  assignedWorkers: PlacedNpc[];
+  assignedResidents: PlacedNpc[];
+  workerSynergyBonusPct: number;
+  effectiveProduction: ResourceYieldMap;
+  effectiveConsumption: ResourceYieldMap;
+  netYield: ResourceYieldMap;
+}
+
+export function resolveBuildingRpgProfile(
+  building: PlacedBuilding,
+  allBuildings: PlacedBuilding[],
+  allNpcs: PlacedNpc[],
+  customAssignments?: Record<string, CustomNpcAssignment>
+): ResolvedBuildingRpgProfile {
+  const catalogEntry =
+    ARCHITECTURAL_CATALOG.find((c) => c.buildingType === building.buildingType) ??
+    ARCHITECTURAL_CATALOG[0];
+
+  const patronHouse =
+    NOBLE_HOUSES_CATALOG.find((h) => h.id === catalogEntry.patronHouseId) ??
+    NOBLE_HOUSES_CATALOG[0];
+
+  const tier = building.tier ?? 1;
+  const tierLabels = [
+    'Niveau I • Fondation Classique',
+    'Niveau II • Édifice Majeur',
+    'Niveau III • Monument Impérial',
+    'Niveau IV • Monument Hélios (Palier Technologique)',
+  ];
+  const tierLabel = tierLabels[Math.min(3, Math.max(0, tier - 1))];
+
+  const assignedWorkers: PlacedNpc[] = [];
+  const assignedResidents: PlacedNpc[] = [];
+
+  allNpcs.forEach((npc) => {
+    const profile = resolveNpcRpgProfile(npc, allBuildings, allNpcs, customAssignments);
+    if (profile.workBuildingId === building.id) {
+      assignedWorkers.push(npc);
+    }
+    if (profile.homeBuildingId === building.id) {
+      assignedResidents.push(npc);
+    }
+  });
+
+  // Calculate synergy bonus from workers (+15% per assigned worker + extra if role matches)
+  let synergyPct = 0;
+  assignedWorkers.forEach((w) => {
+    synergyPct += w.role === catalogEntry.workforceRole ? 24 : 14;
+  });
+
+  const tierMultiplier = 1 + (tier - 1) * 0.35;
+  const totalProdMultiplier = tierMultiplier * (1 + synergyPct / 100);
+  const totalConsMultiplier = 1 + (tier - 1) * 0.2;
+
+  const effectiveProduction: ResourceYieldMap = {
+    stability: Math.round(catalogEntry.baseProduction.stability * totalProdMultiplier),
+    prosperity: Math.round(catalogEntry.baseProduction.prosperity * totalProdMultiplier),
+    knowledge: Math.round(catalogEntry.baseProduction.knowledge * totalProdMultiplier),
+    influence: Math.round(catalogEntry.baseProduction.influence * totalProdMultiplier),
+  };
+
+  const effectiveConsumption: ResourceYieldMap = {
+    stability: Math.round(catalogEntry.baseConsumption.stability * totalConsMultiplier),
+    prosperity: Math.round(catalogEntry.baseConsumption.prosperity * totalConsMultiplier),
+    knowledge: Math.round(catalogEntry.baseConsumption.knowledge * totalConsMultiplier),
+    influence: Math.round(catalogEntry.baseConsumption.influence * totalConsMultiplier),
+  };
+
+  const netYield: ResourceYieldMap = {
+    stability: effectiveProduction.stability - effectiveConsumption.stability,
+    prosperity: effectiveProduction.prosperity - effectiveConsumption.prosperity,
+    knowledge: effectiveProduction.knowledge - effectiveConsumption.knowledge,
+    influence: effectiveProduction.influence - effectiveConsumption.influence,
+  };
+
+  return {
+    catalogEntry,
+    patronHouse,
+    tier,
+    tierLabel,
+    assignedWorkers,
+    assignedResidents,
+    workerSynergyBonusPct: synergyPct,
+    effectiveProduction,
+    effectiveConsumption,
+    netYield,
+  };
+}
+
+/* ==========================================================================
+   6. Detailed Resource Production & Consumption Breakdown Calculator (PT-61)
+   ========================================================================== */
+
+export interface ResourceLedgerLineItem {
+  entityId: string;
+  entityType: 'building' | 'npc' | 'imperial_base';
+  name: string;
+  subtitle: string;
+  amount: number;
+}
+
+export interface ResourceLedgerBreakdown {
+  resourceKey: ExtendedResourceKey;
+  family: 'imperial' | 'material' | 'tech';
+  code: string;
+  label: string;
+  unit: string;
+  totalProduction: number;
+  totalConsumption: number;
+  netRatePerTurn: number;
+  producers: ResourceLedgerLineItem[];
+  consumers: ResourceLedgerLineItem[];
+}
+
+export const RESOURCE_METADATA_CATALOG: Record<
+  ExtendedResourceKey,
+  {
+    family: 'imperial' | 'material' | 'tech';
+    code: string;
+    shortLabel: string;
+    label: string;
+    unit: string;
+    colorHex: string;
+    description: string;
+  }
+> = {
+  stability: {
+    family: 'imperial',
+    code: 'imp_STABILITY',
+    shortLabel: 'Stabilité',
+    label: 'Stabilité Politique & Civique',
+    unit: '/ tour',
+    colorHex: '#34d399',
+    description: 'Concorde civique entre les Maisons Nobles et l’autorité du Souverain.',
+  },
+  prosperity: {
+    family: 'imperial',
+    code: 'imp_PROSPERITY',
+    shortLabel: 'Prospérité',
+    label: 'Prospérité Économique & Énergétique',
+    unit: '/ tour',
+    colorHex: '#fbbf24',
+    description: 'Dynamisme matériel, logistique et abondance des quartiers du plateau.',
+  },
+  knowledge: {
+    family: 'imperial',
+    code: 'imp_KNOWLEDGE',
+    shortLabel: 'Savoir',
+    label: 'Savoir Scientifique & Chroniques',
+    unit: '/ tour',
+    colorHex: '#38bdf8',
+    description: 'Érudition astronomique, cartographie orbitale et archives du Bio-Dôme.',
+  },
+  influence: {
+    family: 'imperial',
+    code: 'imp_INFLUENCE',
+    shortLabel: 'Influence',
+    label: 'Rayonnement & Influence Impériale',
+    unit: '/ tour',
+    colorHex: '#c084fc',
+    description: 'Prestige diplomatique sur les 6 Zones Plateaux de la planète.',
+  },
+  marble: {
+    family: 'material',
+    code: 'mat_MARBLE',
+    shortLabel: 'Marbre',
+    label: 'Marbre Blanc de Carrare Stellaire',
+    unit: 'blocs / tour',
+    colorHex: '#e2e8f0',
+    description: 'Pierre noble destinée aux colonnades, rotondes et monuments capitolins.',
+  },
+  basalt: {
+    family: 'material',
+    code: 'mat_BASALT',
+    shortLabel: 'Basalte',
+    label: 'Basalte & Obsidienne de Fondations',
+    unit: 'tonnes / tour',
+    colorHex: '#94a3b8',
+    description: 'Roche dense assurant l’assise structurelle des terrasses et astroports.',
+  },
+  crystal: {
+    family: 'material',
+    code: 'mat_CRYSTAL',
+    shortLabel: 'Cristal',
+    label: 'Verre Cristallin & Quartz Géodésique',
+    unit: 'prismes / tour',
+    colorHex: '#67e8f9',
+    description: 'Silice purifiée pour les coupoles pressurisées et lentilles astronomiques.',
+  },
+  biomass: {
+    family: 'material',
+    code: 'mat_BIOMASS',
+    shortLabel: 'Biomasse',
+    label: 'Biomasse & Semences Exobiologiques',
+    unit: 'unités / tour',
+    colorHex: '#4ade80',
+    description: 'Substrat organique nourrissant les serres hydroponiques et les forêts.',
+  },
+  energy: {
+    family: 'tech',
+    code: 'rsc_ENERGY',
+    shortLabel: 'Énergie Hélios',
+    label: 'Énergie Hélios (Flux Stellaire Capté)',
+    unit: 'MW / tour',
+    colorHex: '#f97316',
+    description: 'Flux plasmique capté par les Tours Relais pour alimenter le bouclier et les dômes.',
+  },
+  alloy: {
+    family: 'tech',
+    code: 'rsc_ALLOY',
+    shortLabel: 'Alliages',
+    label: 'Alliages Adamantins & Bronze Solaire',
+    unit: 'lingots / tour',
+    colorHex: '#f59e0b',
+    description: 'Métallurgie avancée indispensable aux armatures de Palier IV et vaisseaux.',
+  },
+  data: {
+    family: 'tech',
+    code: 'rsc_DATA',
+    shortLabel: 'Axiomes',
+    label: 'Axiomes & Données Astrométriques',
+    unit: 'codex / tour',
+    colorHex: '#60a5fa',
+    description: 'Calculs orbitaux et théorèmes synthétisés par les Observatoires et Chroniqueurs.',
+  },
+  parts: {
+    family: 'tech',
+    code: 'rsc_PARTS',
+    shortLabel: 'Nanocomposants',
+    label: 'Nanocomposants & Gyroscopes Armillaires',
+    unit: 'modules / tour',
+    colorHex: '#a78bfa',
+    description: 'Mécanismes de haute précision pour le Codex Solaire et les automates de dôme.',
+  },
+};
+
+export interface SolarCodexDecreeDefinition {
+  id: string;
+  title: string;
+  code: string;
+  description: string;
+  costs: Partial<Record<ExtendedResourceKey, number>>;
+  bonuses: Partial<Record<ExtendedResourceKey, number>>;
+  upgradeTargetBuildingTier4?: boolean;
+}
+
+export const SOLAR_CODEX_DECREES: SolarCodexDecreeDefinition[] = [
+  {
+    id: 'decree_helios_overdrive',
+    title: 'Synchronisation de la Couronne Hélios',
+    code: 'CDX-01',
+    description: 'Canalise l’Énergie Hélios et les Axiomes pour stabiliser le climat et accroître la Prospérité impériale.',
+    costs: { energy: 14, data: 10 },
+    bonuses: { prosperity: 12, stability: 8, crystal: 8 },
+  },
+  {
+    id: 'decree_adamantine_monument',
+    title: 'Élévation au Palier IV • Monument Hélios',
+    code: 'CDX-02',
+    description: 'Consomme Alliages Adamantins, Nanocomposants et Marbre pour ériger le principal édifice au Palier IV.',
+    costs: { alloy: 16, parts: 12, marble: 15 },
+    bonuses: { influence: 15, stability: 10, knowledge: 10 },
+    upgradeTargetBuildingTier4: true,
+  },
+  {
+    id: 'decree_biosphere_genesis',
+    title: 'Ensemencement Géodésique Continental',
+    code: 'CDX-03',
+    description: 'Combine Énergie Hélios, Biomasse et Nanocomposants pour multiplier les récoltes et la recherche exobiologique.',
+    costs: { energy: 10, parts: 8, biomass: 16 },
+    bonuses: { knowledge: 14, prosperity: 10, stability: 6 },
+  },
+];
+
+export function computeExtendedResourceLedger(
+  resourceKey: ExtendedResourceKey,
+  buildings: PlacedBuilding[],
+  npcs: PlacedNpc[],
+  customAssignments?: Record<string, CustomNpcAssignment>
+): ResourceLedgerBreakdown {
+  const meta = RESOURCE_METADATA_CATALOG[resourceKey];
+
+  const baseDotationAmount =
+    meta.family === 'imperial' ? 10 : meta.family === 'material' ? 4 : 3;
+
+  const producers: ResourceLedgerLineItem[] = [
+    {
+      entityId: 'arrival_gate',
+      entityType: 'imperial_base',
+      name: 'Porte Céleste & Capitole Impérial',
+      subtitle: 'Dotation de Fondation Souveraine',
+      amount: baseDotationAmount,
+    },
+  ];
+  const consumers: ResourceLedgerLineItem[] = [];
+
+  buildings.forEach((bld) => {
+    const prof = resolveBuildingRpgProfile(bld, buildings, npcs, customAssignments);
+    let prod = 0;
+    let cons = 0;
+
+    if (
+      resourceKey === 'stability' ||
+      resourceKey === 'prosperity' ||
+      resourceKey === 'knowledge' ||
+      resourceKey === 'influence'
+    ) {
+      prod = prof.effectiveProduction[resourceKey];
+      cons = prof.effectiveConsumption[resourceKey];
+    } else if (resourceKey === 'marble') {
+      if (bld.buildingType === bld_TYPE_HABITAT || bld.buildingType === bld_TYPE_OBSERVATION) {
+        prod = 3 * prof.tier;
+      } else {
+        cons = 1;
+      }
+    } else if (resourceKey === 'basalt') {
+      if (bld.buildingType === bld_TYPE_RELAY_TOWER || bld.buildingType === bld_TYPE_HABITAT) {
+        prod = 3 * prof.tier;
+      } else {
+        cons = 1;
+      }
+    } else if (resourceKey === 'crystal') {
+      if (bld.buildingType === bld_TYPE_BIO_DOME || bld.buildingType === bld_TYPE_OBSERVATION) {
+        prod = 3 * prof.tier;
+      } else {
+        cons = 1;
+      }
+    } else if (resourceKey === 'biomass') {
+      if (bld.buildingType === bld_TYPE_GREENHOUSE || bld.buildingType === bld_TYPE_BIO_DOME) {
+        prod = 4 * prof.tier;
+      } else if (bld.buildingType === bld_TYPE_HABITAT) {
+        cons = 2;
+      }
+    } else if (resourceKey === 'energy') {
+      if (bld.buildingType === bld_TYPE_RELAY_TOWER) {
+        prod = 6 * prof.tier + prof.assignedWorkers.length * 2;
+      } else {
+        cons = Math.max(1, prof.tier - 1);
+      }
+    } else if (resourceKey === 'alloy') {
+      if (bld.buildingType === bld_TYPE_RELAY_TOWER || bld.buildingType === bld_TYPE_HABITAT) {
+        prod = 2 * prof.tier + prof.assignedWorkers.length;
+      } else if (prof.tier >= 3) {
+        cons = 1;
+      }
+    } else if (resourceKey === 'data') {
+      if (bld.buildingType === bld_TYPE_OBSERVATION || bld.buildingType === bld_TYPE_BIO_DOME) {
+        prod = 3 * prof.tier + prof.assignedWorkers.length * 2;
+      } else if (prof.tier >= 3) {
+        cons = 1;
+      }
+    } else if (resourceKey === 'parts') {
+      if (bld.buildingType === bld_TYPE_RELAY_TOWER || bld.buildingType === bld_TYPE_OBSERVATION) {
+        prod = 2 * prof.tier + prof.assignedWorkers.length;
+      } else if (bld.buildingType === bld_TYPE_GREENHOUSE) {
+        cons = 1;
+      }
+    }
+
+    if (prod > 0) {
+      producers.push({
+        entityId: bld.id,
+        entityType: 'building',
+        name: `${bld.name} (Niv. ${prof.tier})`,
+        subtitle: `${prof.assignedWorkers.length}/${prof.catalogEntry.maxWorkers} colons actifs (+${prof.workerSynergyBonusPct}% synergie)`,
+        amount: prod,
+      });
+    }
+
+    if (cons > 0) {
+      consumers.push({
+        entityId: bld.id,
+        entityType: 'building',
+        name: `${bld.name} (Niv. ${prof.tier})`,
+        subtitle: `Entretien & logistique (${prof.catalogEntry.categoryLabel})`,
+        amount: cons,
+      });
+    }
+  });
+
+  npcs.forEach((npc) => {
+    const rpg = resolveNpcRpgProfile(npc, buildings, npcs, customAssignments);
+    let npcProd = 0;
+    let npcCons = 0;
+
+    if (
+      resourceKey === 'stability' ||
+      resourceKey === 'prosperity' ||
+      resourceKey === 'knowledge' ||
+      resourceKey === 'influence'
+    ) {
+      rpg.traits.forEach((tr) => {
+        const mod = tr.modifiers[resourceKey] ?? 0;
+        if (mod > 0) npcProd += mod;
+        if (mod < 0) npcCons += Math.abs(mod);
+      });
+      if (resourceKey === 'prosperity' && npc.role !== npc_ROLE_SOVEREIGN) {
+        npcCons += 1;
+      }
+    } else if (resourceKey === 'energy' && npc.role === npc_ROLE_ENGINEER) {
+      npcProd += 3;
+    } else if (resourceKey === 'alloy' && npc.role === npc_ROLE_ENGINEER) {
+      npcProd += 2;
+    } else if (
+      resourceKey === 'data' &&
+      (npc.role === npc_ROLE_RESEARCHER || npc.role === npc_ROLE_CHRONICLER)
+    ) {
+      npcProd += 3;
+    } else if (
+      resourceKey === 'parts' &&
+      (npc.role === npc_ROLE_ENGINEER || npc.role === npc_ROLE_PILOT)
+    ) {
+      npcProd += 2;
+    } else if (resourceKey === 'biomass' && npc.role === npc_ROLE_BOTANIST) {
+      npcProd += 3;
+    }
+
+    if (npcProd > 0) {
+      producers.push({
+        entityId: npc.id,
+        entityType: 'npc',
+        name: npc.name,
+        subtitle: `${npc.role} • ${rpg.house.name}`,
+        amount: npcProd,
+      });
+    }
+
+    if (npcCons > 0) {
+      consumers.push({
+        entityId: npc.id,
+        entityType: 'npc',
+        name: npc.name,
+        subtitle: `Besoins civiques & Traits (${npc.role})`,
+        amount: npcCons,
+      });
+    }
+  });
+
+  const totalProduction = producers.reduce((acc, item) => acc + item.amount, 0);
+  const totalConsumption = consumers.reduce((acc, item) => acc + item.amount, 0);
+
+  return {
+    resourceKey,
+    family: meta.family,
+    code: meta.code,
+    label: meta.label,
+    unit: meta.unit,
+    totalProduction,
+    totalConsumption,
+    netRatePerTurn: totalProduction - totalConsumption,
+    producers,
+    consumers,
+  };
+}
+
+export function computeResourceLedger(
+  resourceKey: ExtendedResourceKey,
+  buildings: PlacedBuilding[],
+  npcs: PlacedNpc[],
+  customAssignments?: Record<string, CustomNpcAssignment>
+): ResourceLedgerBreakdown {
+  return computeExtendedResourceLedger(resourceKey, buildings, npcs, customAssignments);
+}
+
+/* ==========================================================================
+   7. Pre-Built Character Templates Catalog
    ========================================================================== */
 
 export interface PrebuiltCharacterTemplate {
@@ -546,7 +1125,7 @@ export const PREBUILT_CHARACTERS_CATALOG: PrebuiltCharacterTemplate[] = [
     colorHex: '#34d399',
     bio: 'Acclimate les forêts de cyprès stellaires et les récifs coralliens sur le littoral du plateau.',
     mood: 'En harmonie avec la biosphère',
-    highlightSkill: 'Micro-Climats (+7 Prospérité)',
+    highlightSkill: 'Sous-Biomes (+7 Prospérité)',
   },
   {
     id: 'cat_char_cassian_guard',
@@ -569,63 +1148,5 @@ export const PREBUILT_CHARACTERS_CATALOG: PrebuiltCharacterTemplate[] = [
     bio: 'Pilote émérite assurant la liaison commerciale entre les 6 Zones Plateaux de la planète.',
     mood: 'Audacieuse et diplomate',
     highlightSkill: 'Routes Orbitales (+8 Influence)',
-  },
-];
-
-export interface ArchitecturalCatalogEntry {
-  buildingType: BuildingType;
-  title: string;
-  categoryLabel: string;
-  urbanDistrictEffect: string;
-  workforceRole: string;
-  civilizationYield: string;
-  description: string;
-}
-
-export const ARCHITECTURAL_CATALOG: ArchitecturalCatalogEntry[] = [
-  {
-    buildingType: bld_TYPE_OBSERVATION,
-    title: 'Observatoire Astral & Astrolabe',
-    categoryLabel: 'Savoir & Cartographie',
-    urbanDistrictEffect: 'Génère un Parvis Académique pavé de marbre clair',
-    workforceRole: npc_ROLE_RESEARCHER,
-    civilizationYield: '+8 Savoir • +4 Influence',
-    description: 'Tour néo-classique à colonnade supportant une coupole astronomique et des anneaux armillaires en rotation.',
-  },
-  {
-    buildingType: bld_TYPE_BIO_DOME,
-    title: 'Bio-Dôme Climatique Impérial',
-    categoryLabel: 'Biosphère & Écologie',
-    urbanDistrictEffect: 'Crée une Esplanade Botanique avec jardins et bassins',
-    workforceRole: npc_ROLE_BOTANIST,
-    civilizationYield: '+7 Savoir • +6 Prospérité',
-    description: 'Verrière géodésique abritant un écosystème pressurisé et régulant le micro-climat environnant.',
-  },
-  {
-    buildingType: bld_TYPE_RELAY_TOWER,
-    title: 'Obélisque & Tour Relais Solaire',
-    categoryLabel: 'Énergie & Infrastructure',
-    urbanDistrictEffect: 'Établit un Nœud Énergétique illuminé de lanternes dorées',
-    workforceRole: npc_ROLE_ENGINEER,
-    civilizationYield: '+9 Prospérité • +4 Stabilité',
-    description: 'Flèche énergétique captant le rayonnement stellaire pour alimenter toute la province.',
-  },
-  {
-    buildingType: bld_TYPE_HABITAT,
-    title: 'Villa Patricienne & Domus Citoyenne',
-    categoryLabel: 'Résidence & Maisons Nobles',
-    urbanDistrictEffect: 'Développe un Quartier Résidentiel Pavé relié au Forum',
-    workforceRole: npc_ROLE_CHRONICLER,
-    civilizationYield: '+8 Stabilité • +5 Population',
-    description: 'Demeure noble à péristyle et fenêtres chaudement illuminées servant de domicile aux familles et citoyens.',
-  },
-  {
-    buildingType: bld_TYPE_GREENHOUSE,
-    title: 'Serre Hydroponique d’Abondance',
-    categoryLabel: 'Agriculture & Subsistance',
-    urbanDistrictEffect: 'Aménage des Terrasses Agricoles et canaux d’irrigation',
-    workforceRole: npc_ROLE_BOTANIST,
-    civilizationYield: '+8 Prospérité • +5 Stabilité',
-    description: 'Complexe agricole sous voûte cristalline produisant les vivres et élixirs botaniques de la cité.',
   },
 ];

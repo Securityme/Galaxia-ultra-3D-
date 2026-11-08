@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+}
+
 @layer base {
   :root {
-    --font-display: 'Fraunces', Georgia, serif;
+    --font-display: 'Outfit', 'Plus Jakarta Sans', sans-serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
   }
@@ -21,10 +28,13 @@
 
   body {
     font-family: var(--font-sans);
+    letter-spacing: 0.01em;
+    line-height: 1.55;
     user-select: none;
     -webkit-user-select: none;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     touch-action: pan-x pan-y;
   }
 
@@ -32,11 +42,12 @@
     touch-action: manipulation;
   }
 
-  h1, h2, .font-display {
+  h1, h2, h3, h4, .font-display, .font-serif {
     font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
 
-  .font-mono-tabular {
+  .font-mono, .font-mono-tabular {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }

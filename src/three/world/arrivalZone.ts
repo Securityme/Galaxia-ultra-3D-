@@ -10,6 +10,12 @@ import {
   wld_ARRIVAL_ZONE_Z,
 } from '../../config/constants';
 import { getTerrainHeight } from '../../core/terrainMath';
+import {
+  createBronzeFiligreeTexture,
+  createBuildingFacadeTexture,
+  createCliffStrataTexture,
+  createForumMosaicPlazaTexture,
+} from '../textures/proceduralTextures';
 
 export interface ArrivalZone3D {
   group: THREE.Group;
@@ -23,35 +29,52 @@ export interface ArrivalZone3D {
 
 export function createArrivalZone3D(): ArrivalZone3D {
   const group = new THREE.Group();
-  group.name = 'PlateauArrivalZone3D';
+  group.name = 'Collection_02_PlateauArrivalGate';
 
   const rootPlaza = new THREE.Group();
   rootPlaza.userData = { entityType: 'arrival_zone', entityId: 'arrival_gate' };
   group.add(rootPlaza);
 
-  // Materials
+  const stoneTex = createCliffStrataTexture();
+  const marbleTex = createBuildingFacadeTexture();
+  const mosaicTex = createForumMosaicPlazaTexture();
+  const bronzeTex = createBronzeFiligreeTexture();
+
+  // Materials with dedicated PBR textures
   const limestoneMat = new THREE.MeshStandardMaterial({
     color: 0xe8dfd1,
+    map: stoneTex,
+    bumpMap: stoneTex,
+    bumpScale: 0.06,
     roughness: 0.62,
     metalness: 0.08,
   });
 
   const marbleMat = new THREE.MeshStandardMaterial({
-    color: 0xf7f3eb,
-    roughness: 0.4,
+    color: 0xfaf5eb,
+    map: marbleTex,
+    bumpMap: marbleTex,
+    bumpScale: 0.05,
+    roughness: 0.38,
     metalness: 0.12,
   });
 
   const darkSlateMat = new THREE.MeshStandardMaterial({
-    color: 0x263447,
-    roughness: 0.48,
+    color: 0x3b4d66,
+    map: mosaicTex,
+    bumpMap: mosaicTex,
+    bumpScale: 0.04,
+    roughness: 0.45,
     metalness: 0.35,
   });
 
   const bronzeMat = new THREE.MeshStandardMaterial({
-    color: 0xc89d54,
-    roughness: 0.3,
-    metalness: 0.78,
+    color: 0xd4ad60,
+    map: bronzeTex,
+    bumpMap: bronzeTex,
+    bumpScale: 0.04,
+    roughness: 0.26,
+    metalness: 0.82,
   });
 
   const beaconMat = new THREE.MeshStandardMaterial({

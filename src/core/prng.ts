@@ -1,9 +1,20 @@
 /**
- * PAX HISTORIA 3D • Deterministic PRNG (Mulberry32)
+ * GALAXIA ULTRA • Bio-Dôme de Poche • Deterministic PRNG (Mulberry32)
  * Guarantees 100% reproducible continents, topography, and historical seeds.
+ * Callable both as `rng()` and via methods `rng.next()`, `rng.range()`, `rng.int()`, `rng.bool()`, `rng.pick()`, `rng.shuffle()`.
  */
 
-export function createPRNG(seed: string | number) {
+export interface DeterministicPRNG {
+  (): number;
+  next: () => number;
+  range: (min: number, max: number) => number;
+  int: (min: number, max: number) => number;
+  bool: (probability?: number) => boolean;
+  pick: <T>(array: readonly T[]) => T;
+  shuffle: <T>(array: readonly T[]) => T[];
+}
+
+export function createPRNG(seed: string | number): DeterministicPRNG {
   let s = typeof seed === 'number' ? Math.floor(seed) : hashString(seed);
 
   function next(): number {
@@ -14,7 +25,7 @@ export function createPRNG(seed: string | number) {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
-  return {
+  const prng = Object.assign(next, {
     next,
     range(min: number, max: number): number {
       return min + next() * (max - min);
@@ -38,7 +49,9 @@ export function createPRNG(seed: string | number) {
       }
       return copy;
     },
-  };
+  });
+
+  return prng;
 }
 
 function hashString(str: string): number {

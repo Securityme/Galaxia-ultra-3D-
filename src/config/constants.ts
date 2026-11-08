@@ -1,10 +1,10 @@
 /**
- * GALAXIA ULTRA • PAX HISTORIA 3D Configuration Constants
- * Named architectural constants (wld_, bld_, npc_, cam_, wtr_, ui_).
+ * GALAXIA ULTRA • Bio-Dôme de Poche Configuration Constants
+ * Named architectural constants (wld_, bld_, npc_, cam_, wtr_, rsc_, evt_, ast_, ui_).
  */
 
 /* ==========================================================================
-   WLD_: World, Expanded Curved Plateau & 3D Planet Globe Constants
+   WLD_: World, Expanded Curved Plateau, Aurora Horizon Crown & 3D Planet Globe
    ========================================================================== */
 
 export const wld_PLATEAU_WIDTH = 112;
@@ -33,12 +33,83 @@ export const wld_ARRIVAL_ZONE_Z = 24.0;
 export const wld_ARRIVAL_ZONE_RADIUS = 5.2;
 export const wld_ARRIVAL_ZONE_ELEVATION = 1.35;
 
+// PT-60: Immersive Horizon « Couronne de l'Aurore » (H1..H4 deterministic layers)
+export const wld_HORIZON_CROWN_INNER = 68;
+export const wld_HORIZON_CROWN_OUTER = 96;
+export const wld_HORIZON_PEAK_MAX = 14;
+export const wld_CLOUD_BAND_Y = 10;
+export const wld_CLOUD_SPRITE_COUNT_CINEMA = 28;
+export const wld_CLOUD_SPRITE_COUNT_PERFORMANCE = 14;
+export const wld_CLOUD_DRIFT_PER_TICK = 0.00045;
+export const wld_MOON_ORBIT_PER_TICK = 0.00032;
+
 export const wld_STAR_COUNT = 3200;
 export const wld_ASTEROID_COUNT = 18;
 export const wld_NEBULA_SPRITE_COUNT = 8;
 export const wld_DUST_PARTICLE_COUNT = 180;
 
 export const wld_CELESTIAL_CYCLE_RATE = 0.04;
+
+/* ==========================================================================
+   EVT_: Fixed-Tick Simulation & Event Orchestration Constants (PT-47)
+   ========================================================================== */
+
+export const evt_TICK_HZ = 10;
+export const evt_TICK_INTERVAL_SEC = 1 / evt_TICK_HZ;
+export const evt_MAX_OFFLINE_HOURS = 4;
+export const evt_CRISIS_MAX_LAST_TEN = 2;
+
+/* ==========================================================================
+   RSC_: Canonical Imperial, Material & Technological Resource Registry (PT-61)
+   ========================================================================== */
+
+export const rsc_STABILITY = 'stability' as const;
+export const rsc_PROSPERITY = 'prosperity' as const;
+export const rsc_KNOWLEDGE = 'knowledge' as const;
+export const rsc_INFLUENCE = 'influence' as const;
+
+export const rsc_IMPERIAL_TYPES = [
+  rsc_STABILITY,
+  rsc_PROSPERITY,
+  rsc_KNOWLEDGE,
+  rsc_INFLUENCE,
+] as const;
+
+export const rsc_MARBLE = 'marble' as const;
+export const rsc_BASALT = 'basalt' as const;
+export const rsc_CRYSTAL = 'crystal' as const;
+export const rsc_BIOMASS = 'biomass' as const;
+
+export const rsc_MATERIAL_TYPES = [
+  rsc_MARBLE,
+  rsc_BASALT,
+  rsc_CRYSTAL,
+  rsc_BIOMASS,
+] as const;
+
+// PT-61: Technological Resource Registry (Helios Sector Lineage AA-3)
+export const rsc_ENERGY = 'energy' as const;
+export const rsc_ALLOY = 'alloy' as const;
+export const rsc_DATA = 'data' as const;
+export const rsc_PARTS = 'parts' as const;
+
+export const rsc_TECH_TYPES = [
+  rsc_ENERGY,
+  rsc_ALLOY,
+  rsc_DATA,
+  rsc_PARTS,
+] as const;
+
+export const rsc_ALL_TYPES = [
+  ...rsc_IMPERIAL_TYPES,
+  ...rsc_MATERIAL_TYPES,
+  ...rsc_TECH_TYPES,
+] as const;
+
+export type ImperialResourceType = (typeof rsc_IMPERIAL_TYPES)[number];
+export type MaterialResourceType = (typeof rsc_MATERIAL_TYPES)[number];
+export type TechResourceType = (typeof rsc_TECH_TYPES)[number];
+export type AnyResourceType = (typeof rsc_ALL_TYPES)[number];
 
 /* ==========================================================================
    VIEW_: Primary 3D World View Modes (Plateau vs 3D Planet Map)
@@ -77,6 +148,8 @@ export const bld_HOLOGRAM_GLOW_INTENSITY = 1.6;
    ========================================================================== */
 
 export const wtr_CALM = 'calm' as const;
+export const wtr_LIGHT_RAIN = 'light_rain' as const;
+export const wtr_MIST = 'mist' as const;
 export const wtr_STARDUST_DRIFT = 'stardust_drift' as const;
 export const wtr_ELECTRICAL_STORM = 'electrical_storm' as const;
 export const wtr_AURORA_CURTAIN = 'aurora_curtain' as const;
@@ -84,6 +157,8 @@ export const wtr_SOLAR_FLARE = 'solar_flare' as const;
 
 export const wtr_TYPES = [
   wtr_CALM,
+  wtr_LIGHT_RAIN,
+  wtr_MIST,
   wtr_STARDUST_DRIFT,
   wtr_ELECTRICAL_STORM,
   wtr_AURORA_CURTAIN,
@@ -123,7 +198,7 @@ export const npc_BOB_FREQUENCY = 7.0;
 export const npc_BOB_AMPLITUDE = 0.08;
 
 /* ==========================================================================
-   CAM_: Spectator Camera Framing Modes & Inertia
+   CAM_: Spectator Camera Framing Modes, Inertia & Native Gesture Thresholds (R-PT-59)
    ========================================================================== */
 
 export const cam_MODE_ORBIT = 'orbit' as const;
@@ -148,9 +223,24 @@ export const cam_PLATEAU_TARGET = { x: 0, y: 1.5, z: 0 };
 export const cam_INERTIA_DAMPING = 0.095;
 export const cam_MODE_TRANSITION_SPEED = 3.5;
 
+// R-PT-59: Canonical Native Gesture Thresholds & Sensitivities
+export const cam_GESTURE_TAP_THRESHOLD = 7;
+export const cam_GESTURE_PAN_SENSITIVITY = 0.062;
+export const cam_GESTURE_ROTATE_SENSITIVITY = 0.0065;
+export const cam_GESTURE_PINCH_SENSITIVITY = 0.11;
+export const cam_GESTURE_TWIST_SENSITIVITY = 1.85;
+
 /* ==========================================================================
-   UI_: Interface & Touch Constants
+   UI_: Interface & Save Constants
    ========================================================================== */
 
-export const ui_TOUCH_TARGET_MIN_PX = 44;
 export const ui_MAX_SAVE_SLOTS = 4;
+
+/* ==========================================================================
+   AST_: Asset Registry & PT-74 WASM Kernel Versioning
+   ========================================================================== */
+
+export const ast_WASM_SIM_KERNEL_ID = 'ast_wasm_sim_kernel_v4_0_0';
+export const ast_WASM_SIM_KERNEL_VERSION = 'v4.0.0';
+export const ast_WASM_EXPECTED_FINGERPRINT = 'fnv1a64:8f4e2c19a70b3d51';
+

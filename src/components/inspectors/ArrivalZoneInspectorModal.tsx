@@ -25,6 +25,7 @@ import {
   wld_ARRIVAL_ZONE_X,
   wld_ARRIVAL_ZONE_Z,
 } from '../../config/constants';
+import { createPRNG } from '../../core/prng';
 import { GlassPanel } from '../ui/GlassPanel';
 
 export interface ArrivalZoneInspectorModalProps {
@@ -67,27 +68,30 @@ export const ArrivalZoneInspectorModal: React.FC<ArrivalZoneInspectorModalProps>
     const idx = (npcs.length + convoysCount) % ENVOY_NAMES.length;
     const role = npc_ROLES[(npcs.length + convoysCount) % npc_ROLES.length];
     const name = ENVOY_NAMES[idx];
+    const rng = createPRNG(`${activeZone.id}_convoy_${turnNumber}_${convoysCount}_${npcs.length}`);
+    const detStamp = turnNumber * 1000 + convoysCount * 10 + npcs.length;
 
     const newEnvoy = {
-      id: `npc_convoy_${Date.now()}`,
+      id: `npc_convoy_t${turnNumber}_c${convoysCount + 1}`,
       name,
       role,
       bio: `Débarqué à la ${activeZone.arrivalPortName} lors du convoi orbital #${convoysCount + 1}.`,
       mood: 'Enthousiaste à l’arrivée',
-      x: wld_ARRIVAL_ZONE_X + (Math.random() - 0.5) * 1.4,
+      x: Number((wld_ARRIVAL_ZONE_X + (rng() - 0.5) * 1.4).toFixed(2)),
       z: wld_ARRIVAL_ZONE_Z - 1.8,
-      targetX: (Math.random() - 0.5) * 6,
+      targetX: Number(((rng() - 0.5) * 6).toFixed(2)),
       targetZ: -2.0,
       colorHex: ENVOY_COLORS[idx % ENVOY_COLORS.length],
-      spawnedAt: Date.now(),
+      spawnedAt: detStamp,
     };
 
     setNpcs([...npcs, newEnvoy]);
     setChronicles([
       {
-        id: `chr_convoy_${Date.now()}`,
-        timestamp: Date.now(),
+        id: `chr_convoy_t${turnNumber}_c${convoysCount + 1}`,
+        timestamp: detStamp,
         turnNumber,
+        category: 'DIPLOMATIE',
         title: `Atterrissage Orbital • ${activeZone.arrivalPortName}`,
         narrative: `La navette impériale s'est posée sur l'esplanade de ${activeZone.name}. ${name} (${role}) rejoint la province.`,
         chosenChoiceLabel: 'Accueillir le convoi orbital sur la Zone d’Arrivée',
@@ -95,6 +99,8 @@ export const ArrivalZoneInspectorModal: React.FC<ArrivalZoneInspectorModalProps>
           `Zone Plateau : ${activeZone.name}`,
           `Émissaire : ${name}`,
         ],
+        economicDeltasSummary: [],
+        causalRefs: [newEnvoy.id],
       },
       ...chronicles,
     ]);
@@ -107,8 +113,11 @@ export const ArrivalZoneInspectorModal: React.FC<ArrivalZoneInspectorModalProps>
   };
 
   return (
-    <div className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 w-[min(95vw,620px)] max-h-[calc(100dvh-10.5rem)] overflow-y-auto pointer-events-auto px-1">
-      <GlassPanel className="p-4 sm:p-5 border-amber-300/40 shadow-[0_18px_55px_rgba(0,0,0,0.8)]">
+    <div className="fixed bottom-16 sm:bottom-20 left-1/2 -translate-x-1/2 z-20 w-[min(95vw,620px)] pointer-events-auto px-1">
+      <GlassPanel
+        windowId="inspector-arrival-zone-window"
+        className="p-4 sm:p-5 max-h-[calc(100dvh-10.5rem)] overflow-y-auto border-amber-300/40 shadow-[0_18px_55px_rgba(0,0,0,0.8)]"
+      >
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center border border-amber-300/40 bg-amber-400/20">

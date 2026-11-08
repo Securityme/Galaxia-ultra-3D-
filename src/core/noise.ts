@@ -190,3 +190,32 @@ export function createNoise2D(seed: string | number = 42): NoiseGenerator {
 
   return noise2D;
 }
+
+export class FractalNoise3D {
+  private gen: NoiseGenerator;
+
+  constructor(seed: string | number = 42) {
+    this.gen = createNoise2D(seed);
+  }
+
+  noise2D(x: number, y: number): number {
+    return this.gen(x, y);
+  }
+
+  fbm2D(x: number, y: number, octaves = 4, persistence = 0.5, lacunarity = 2.0): number {
+    return this.gen.fractal(x, y, octaves, persistence, lacunarity);
+  }
+
+  ridged2D(x: number, y: number, octaves = 4, persistence = 0.5, lacunarity = 2.1): number {
+    return this.gen.ridged(x, y, octaves, persistence, lacunarity);
+  }
+
+  fbm3D(x: number, y: number, z: number, octaves = 4, persistence = 0.5, lacunarity = 2.0): number {
+    return this.gen.fractal3D(x, y, z, octaves, persistence, lacunarity);
+  }
+
+  fbm(x: number, y: number, z = 0, octaves = 4, lacunarity = 2.0, persistence = 0.5): number {
+    return this.gen.fractal3D(x, y, z, octaves, persistence, lacunarity);
+  }
+}
+

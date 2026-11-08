@@ -133,7 +133,7 @@ export function createPlanetGlobe(
   const stemGeo = new THREE.CylinderGeometry(0.06, 0.12, 1.45, 8);
   const crystalGeo = new THREE.OctahedronGeometry(0.46, 0);
   const ringGeo = new THREE.RingGeometry(1.75, 2.15, 32);
-  const hitSphereGeo = new THREE.SphereGeometry(2.35, 12, 12);
+  const hitSphereGeo = new THREE.SphereGeometry(4.6, 14, 14);
   const hitSphereMat = new THREE.MeshBasicMaterial({
     transparent: true,
     opacity: 0,

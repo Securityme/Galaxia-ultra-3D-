@@ -1,29 +1,77 @@
-import React from 'react';
-import { useAtom } from 'jotai';
+import React, { useEffect, useState } from 'react';
+import { useAtom, useAtomValue } from 'jotai';
 import {
+  Activity,
   CheckCircle2,
-  Cpu,
   FileCode2,
   FolderTree,
   Gamepad2,
-  Globe2,
+  Layers,
+  Play,
   X,
 } from 'lucide-react';
-import { isBlueprintModalOpenAtom } from '../../stores/worldStore';
+import {
+  isBlueprintModalOpenAtom,
+  worldSeedAtom,
+} from '../../stores/worldStore';
+import { runGoldenAcceptanceSimulation } from '../../core/events/turnOrchestrator';
+import {
+  getActiveKernelBackendInfo,
+  verifyDeterministicKernelParity,
+} from '../../core/simulation/wasmBridge';
+import {
+  detectRenderHardwareCapabilities,
+  RenderHardwareCapabilities,
+} from '../../three/capabilitiesBridge';
+import { OPEN_ASSET_REGISTRY } from '../../three/materials/materialManager';
 import { GlassPanel } from '../ui/GlassPanel';
 
 /**
- * Interactive In-App Blueprint & Architecture Specification Viewer (v4.0).
- * Documents the full feature list, /src directory tree, tech stack, UX vision, gameplay & world build.
+ * Interactive In-App Blueprint & Architecture Specification Viewer (D1-GU-PT v1.0.0 .. v4.0.0).
+ * Includes the live 100-Turn Deterministic Golden Benchmark (PT-58) & TS/WASM Parity Check (PT-74).
  */
 export const BlueprintArchitectureModal: React.FC = () => {
   const [isOpen, setIsOpen] = useAtom(isBlueprintModalOpenAtom);
+  const seed = useAtomValue(worldSeedAtom);
+
+  const [hwCaps, setHwCaps] = useState<RenderHardwareCapabilities | null>(null);
+  const [benchResult, setBenchResult] = useState<{
+    turnsSimulated: number;
+    parityVerified: boolean;
+    initialFingerprint: string;
+    finalFingerprint: string;
+    replayFingerprint: string;
+    crisisSharePct: number;
+    wasmParityPassed: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setHwCaps(detectRenderHardwareCapabilities());
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const kernelInfo = getActiveKernelBackendInfo();
+
+  const handleRunGoldenBenchmark = () => {
+    const golden = runGoldenAcceptanceSimulation(seed, 100);
+    const wasmParity = verifyDeterministicKernelParity(seed);
+
+    setBenchResult({
+      turnsSimulated: golden.turnsSimulated,
+      parityVerified: golden.replayDeterministicMatch,
+      initialFingerprint: wasmParity.fingerprintA,
+      finalFingerprint: golden.initialRunFingerprint,
+      replayFingerprint: golden.replayedLedgerFingerprint,
+      crisisSharePct: golden.crisisSharePct,
+      wasmParityPassed: wasmParity.passed,
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-6">
-      <GlassPanel className="w-full max-w-5xl max-h-[88vh] flex flex-col p-5 sm:p-7">
+      <GlassPanel className="w-full max-w-5xl max-h-[90vh] flex flex-col p-5 sm:p-7">
         <div className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-sky-400/15 border border-sky-300/35 flex items-center justify-center text-sky-300">
@@ -31,10 +79,10 @@ export const BlueprintArchitectureModal: React.FC = () => {
             </div>
             <div>
               <h2 className="font-serif text-xl sm:text-2xl font-semibold text-amber-50">
-                Blueprint Officiel • GALAXIA ULTRA : PAX HISTORIA 3D (v4.0)
+                Blueprint Officiel • GALAXIA ULTRA • Bio-Dôme de Poche (D1-GU-PT v4.0.0)
               </h2>
               <p className="text-xs text-slate-400">
-                Style « Astral Antiquity » • Grand-Strategy Narrative sur Monde Courbe, Chrono-Builder Dynastique & God-Game Encyclopédique 3D
+                Registre Canonique PT-17 à PT-81 • Noyau Tick-Exact 10 Hz • Couronne de l’Aurore • Pile Puissance Supérieure
               </p>
             </div>
           </div>
@@ -48,48 +96,109 @@ export const BlueprintArchitectureModal: React.FC = () => {
           </button>
         </div>
 
-        <div className="mt-4 flex-1 overflow-y-auto space-y-6 pr-2 text-xs text-slate-200 leading-relaxed">
+        <div className="mt-4 flex-1 overflow-y-auto space-y-5 pr-2 text-xs text-slate-200 leading-relaxed">
+          {/* Interactive Golden Test & Parity Suite (PT-58 / PT-74 / PT-76) */}
+          <section className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="font-serif text-base font-semibold text-emerald-200 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-emerald-300" />
+                  Banc d’Essai Déterministe 100 Tours & Parité TS/WASM (PT-58 • PT-74 • PT-76)
+                </h3>
+                <p className="text-slate-300 mt-0.5">
+                  Vérifie en direct le rejeu bit-à-bit sur 100 tours consécutifs et la parité d’empreinte FNV-1a du noyau.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRunGoldenBenchmark}
+                className="flex items-center gap-2 rounded-xl bg-emerald-400/25 border border-emerald-300/50 px-4 py-2 text-xs font-semibold text-emerald-100 hover:bg-emerald-400/35 transition cursor-pointer"
+              >
+                <Play className="w-3.5 h-3.5 fill-current" />
+                <span>Exécuter Banc 100 Tours</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 font-mono text-[11px]">
+              <div className="rounded-xl bg-black/35 border border-white/10 p-2.5">
+                <span className="text-slate-400 block">Noyau Simulation (PT-74)</span>
+                <span className="text-amber-200 font-semibold">
+                  {kernelInfo.backend.toUpperCase()} • {kernelInfo.tickHz} Hz
+                </span>
+              </div>
+              <div className="rounded-xl bg-black/35 border border-white/10 p-2.5">
+                <span className="text-slate-400 block">Backend Graphique (PT-76)</span>
+                <span className="text-sky-200 font-semibold">
+                  {hwCaps
+                    ? `${hwCaps.activeBackendLabel} (Offscreen: ${
+                        hwCaps.offscreenCanvasSupported ? 'OUI' : 'NON'
+                      })`
+                    : 'Détection...'}
+                </span>
+              </div>
+              <div className="rounded-xl bg-black/35 border border-white/10 p-2.5">
+                <span className="text-slate-400 block">Cible Déploiement (PT-80)</span>
+                <span className="text-purple-200 font-semibold">
+                  Web PWA + Tauri 2.12 Ready
+                </span>
+              </div>
+            </div>
+
+            {benchResult && (
+              <div className="rounded-xl bg-black/45 border border-emerald-400/40 p-3 font-mono text-[11px] space-y-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-emerald-300 font-semibold">
+                  <span>
+                    ✓ {benchResult.turnsSimulated} Tours Simulés sans erreur • Rejeu Ledger :{' '}
+                    {benchResult.parityVerified ? 'IDENTIQUE BIT-À-BIT' : 'ÉCART'}
+                  </span>
+                  <span>
+                    Part Crises : {benchResult.crisisSharePct}% • Parité TS/WASM :{' '}
+                    {benchResult.wasmParityPassed ? 'CONFORME' : 'ÉCART'}
+                  </span>
+                </div>
+                <div className="text-slate-300">
+                  Empreinte Initiale : <span className="text-amber-200">{benchResult.initialFingerprint}</span> →
+                  Empreinte Finale (T100) : <span className="text-emerald-200">{benchResult.finalFingerprint}</span>{' '}
+                  (Rejeu : <span className="text-sky-200">{benchResult.replayFingerprint}</span>)
+                </div>
+              </div>
+            )}
+          </section>
+
           {/* 1. Vision UX, Gameplay & Game Loop */}
           <section className="rounded-2xl border border-amber-300/25 bg-amber-400/5 p-4 space-y-2">
             <h3 className="font-serif text-base font-semibold text-amber-200 flex items-center gap-2">
               <Gamepad2 className="w-4 h-4 text-amber-300" />
-              1. Identité du Style, Vision UX, Gameplay & Game Loop
+              1. Identité Canonique & Invariants (GEC-01-R • GU-14 • GN-01 • R-PT-59)
             </h3>
             <p>
-              <strong>Dénomination du Style :</strong>{' '}
+              <strong>Identité Canonique :</strong>{' '}
               <span className="text-amber-300 font-medium">
-                Esthétique « Astral Antiquity »
+                GALAXIA ULTRA • Bio-Dôme de Poche
               </span>{' '}
-              combinée au genre{' '}
-              <span className="text-sky-300 font-medium">
-                « Grand-Strategy Narrative sur Monde Courbe • Chrono-Builder Dynastique & God-Game Encyclopédique 3D »
-              </span>.
+              — Monde-Plateau Spectateur & Chrono-Builder Dynastique 3D.
             </p>
             <p>
-              <strong>Game Loop (Boucle de Jeu) :</strong> Le joueur incarne un Souverain Fondateur arrivant par vaisseau amiral en orbite, s’authentifie via Google Firebase, configure son Souverain et son Monde (Biome, Météo, Zone), puis descend sur la Porte Céleste du Plateau 3D. À chaque Tour (bouton Play), le moteur génère un événement géopolitique et historique (via Gemini AI ou le moteur déterministe local). Le décret choisi par le joueur fait surgir organiquement de nouveaux édifices, des quartiers urbains pavés, des citoyens affiliés à des Maisons nobles et des mutations météorologiques.
+              <strong>Navigation Pure Gestuelle (R-PT-59) :</strong> Conformément à l’invariant « Spectateur Pur », le panneau flottant et le clavier directionnel ZQSD/WASD sont supprimés. La carte se pilote exclusivement par gestes directs sur le canevas 3D (glisser 1 doigt, torsion/inclinaison 2 doigts, pincement/molette) et boutons de zoom d’accessibilité WCAG dans le menu Paramètres.
             </p>
           </section>
 
-          {/* 2. Liste Complète des Features Intégrées */}
-          <section className="rounded-2xl border border-emerald-400/25 bg-emerald-500/5 p-4 space-y-2.5">
-            <h3 className="font-serif text-base font-semibold text-emerald-200 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-              2. Liste Exhaustive des Features Intégrées (v4.0)
+          {/* 2. Liste Complète des Vagues Intégrées */}
+          <section className="rounded-2xl border border-sky-400/25 bg-sky-500/5 p-4 space-y-2.5">
+            <h3 className="font-serif text-base font-semibold text-sky-200 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-sky-300" />
+              2. Propositions Ratifiées Intégrées (PT-17 à PT-81)
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
               {[
-                'Boot Cinématique 3D Orbital avec approche du Vaisseau Amiral Impérial en temps réel pendant le préchargement.',
-                'Écran de Connexion Obligatoire Google Firebase (signInWithPopup) + Synchronisation Cloud Firestore Zero-Trust.',
-                'Menu Principal Impérial superposé à la scène orbitale 3D vivante.',
-                'Double Vue 3D : Vue Plateau Incurvé (112x112m, courbure sphérique R=185) + Vue Globe Planétaire 3D.',
-                'Horizon Planétaire Vivant : Jupe océanique courbée, chaîne de 28 montagnes enneigées lointaines et dôme atmosphérique.',
-                'Géomorphologie 3D & 5 Micro-Climats Horizontaux : Plages de sable doré & lagune, Massifs montagneux alpins, Bosquet sylvestre, Steppe d’ambre et Quartiers Urbains Pavés.',
-                '6 Zones Plateaux modélisées directement sur le Globe 3D avec bannières cartographiques et Routes Commerciales Orbitales animées.',
-                'PNJ 3D Hybrides : Chargeur Web GLTF/GLB (Soldier.glb + AnimationMixer) + Rig RPG articulé avec tenues de caste, capes, couronnes et navette Maison ↔ Travail.',
-                'Grand Catalogue RPG : 5 Maisons Nobles, 6 Tenues 3D, 5 Points d’Aptitudes (/20), Compétences, Traits Bonus/Malus et Liens Relationnels.',
-                'HUD Minimaliste : Header avec ressources rétractables + Dock inférieur pliable avec tiroirs contextuels « Vue » et « Play ».',
-                'Cartes d’Inspection (Personnage, Bâtiment, Porte d’Arrivée) ancrées proprement au-dessus du footer sans jamais masquer le header ni le footer.',
-                'Navigation Tactile & Gestuelle : Swipe 1 doigt (avant/arrière/gauche/droite), Rotation 2 doigts en sens inverse, Pinch Zoom et Clavier WASD/ZQSD.',
+                'PT-17..PT-32 : Pipeline EffectComposer Niveau Blender, Bloom Sélectif, Sobel 3x3 Normal/Roughness, Eau Gerstner 4 houles (PT-25) & Forêts Instanciées (PT-27).',
+                'PT-47..PT-50 : Noyau Simulation 10 Hz déterministe, Registres Diff-Réconciliés O(1), QualityDirector adaptatif à hystérésis et MaterialManager LRU.',
+                'PT-51..PT-58 : WorldBrief hiérarchique (~1200 tokens), Économie persistante hybride, Cycle 7 phases, Double Carte Simultanée, Effets Latents dueInTurns, Provenance Causale & Rejeu FNV-1a.',
+                'PT-59 (R-PT-59) : Navigation Spectateur Pur 100% gestuelle + Zoom Accessibilité WCAG dans WorldSettingsModal.',
+                'PT-60 : Horizon Planétaire « Couronne de l’Aurore » en 4 couches déterministes (H1 Océan R=128, H2 Archipels 16 îles, H3 Cordillère 48 sommets, H4 Nuages & Anneau Orbital).',
+                'PT-61 : Ressources Technologiques (rsc_ : energy, alloy, data, parts), Grand Livre à 3 Familles, Monument Hélios Palier IV & Décrets du Codex Solaire.',
+                'PT-62 & PT-63 : Registre d’Assets Ouverts CC0 (ast_) et fichier CREDITS.md à la racine.',
+                'PT-74..PT-81 (Pile Puissance v4.0.0) : Pont TS/WASM réversible, Détecteur WebGPU/OffscreenCanvas, Mémoire Sémantique Vectorielle Gemini (/api/ai/embed) & Hub des Graines du Commandant (GXP4).',
               ].map((feat, idx) => (
                 <div
                   key={idx}
@@ -102,81 +211,67 @@ export const BlueprintArchitectureModal: React.FC = () => {
             </div>
           </section>
 
-          {/* 3. Stack Technologique */}
-          <section className="rounded-2xl border border-sky-400/25 bg-sky-500/5 p-4 space-y-2">
-            <h3 className="font-serif text-base font-semibold text-sky-200 flex items-center gap-2">
-              <Cpu className="w-4 h-4 text-sky-300" />
-              3. Spécifications du Stack Technologique
+          {/* 3. Open Asset Registry (PT-62 / PT-63) */}
+          <section className="rounded-2xl border border-purple-400/25 bg-purple-500/5 p-4 space-y-2">
+            <h3 className="font-serif text-base font-semibold text-purple-200 flex items-center gap-2">
+              <Layers className="w-4 h-4 text-purple-300" />
+              3. Registre d’Assets Ouverts CC0 (PT-62 / PT-63)
             </h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-300">
-              <li><strong>Frontend & UI :</strong> React 19 + TypeScript Strict + Tailwind CSS v4 (Design Glassmorphism Impérial).</li>
-              <li><strong>Moteur 3D Temps Réel :</strong> Three.js r186 (WebGLRenderer ACESFilmicToneMapping, sRGB, PMREM RoomEnvironment, GLTFLoader, SkeletonUtils).</li>
-              <li><strong>Gestion d’État Réactive :</strong> Jotai v3 (Atoms modulaires scopés par Zone Planétaire, zéro état métier dans la scène 3D).</li>
-              <li><strong>Authentification & Cloud DB :</strong> Google Firebase Auth + Cloud Firestore Enterprise avec règles Zero-Trust (`firestore.rules`).</li>
-              <li><strong>Contrats & Validation :</strong> Zod v4 + Schemas JSON pour les tours générés par Gemini AI (`@google/genai`).</li>
-            </ul>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {OPEN_ASSET_REGISTRY.map((asset) => (
+                <div
+                  key={asset.id}
+                  className="rounded-xl bg-black/35 border border-white/10 p-2.5 flex items-center justify-between gap-2"
+                >
+                  <div>
+                    <div className="font-semibold text-amber-100">{asset.catalog} — {asset.usage}</div>
+                    <div className="text-[10px] font-mono text-slate-400">
+                      {asset.id} • {asset.format} • {Math.round(asset.compressedSizeBytes / 1024)} Ko
+                    </div>
+                  </div>
+                  <span className="rounded bg-purple-400/20 border border-purple-300/35 px-2 py-0.5 text-[10px] font-mono text-purple-200">
+                    {asset.license}
+                  </span>
+                </div>
+              ))}
+            </div>
           </section>
 
           {/* 4. Arborescence Granulaire de /src */}
-          <section className="rounded-2xl border border-purple-400/25 bg-purple-500/5 p-4 space-y-2">
-            <h3 className="font-serif text-base font-semibold text-purple-200 flex items-center gap-2">
-              <FolderTree className="w-4 h-4 text-purple-300" />
-              4. Arborescence Modulaire du Code Source (/src)
+          <section className="rounded-2xl border border-sky-400/25 bg-sky-500/5 p-4 space-y-2">
+            <h3 className="font-serif text-base font-semibold text-sky-200 flex items-center gap-2">
+              <FolderTree className="w-4 h-4 text-sky-300" />
+              4. Arborescence Modulaire Canonique (/src)
             </h3>
             <pre className="rounded-xl bg-black/50 border border-white/10 p-3.5 font-mono text-[11px] text-amber-100 overflow-x-auto leading-relaxed">
 {`/src
-├── App.tsx                                  # Orchestrateur principal (Canvas 3D + HUD + Modales)
+├── App.tsx                                  # Orchestrateur (WorldBrief PT-51, Gestes R-PT-59)
 ├── config/
-│   ├── constants.ts                         # Constantes typées (wld_, bld_, npc_, cam_, wtr_)
-│   ├── gameDefaults.ts                      # État initial & chroniques de fondation
-│   ├── planetaryZones.ts                    # Catalogue des 6 Zones Plateaux sur le Globe 3D
-│   ├── presets.ts                           # Palettes de Biomes Planétaires sRGB lumineuses
-│   └── rpgCatalogs.ts                       # 5 Maisons Nobles, Tenues 3D, Aptitudes, Traits & Relations
+│   ├── constants.ts                         # Constantes (wld_HORIZON_, evt_TICK_HZ, rsc_, cam_GESTURE_)
+│   ├── chronicle/imperialConstitution.ts    # Constitution Impériale & Mémoire Sémantique (PT-54/78)
+│   └── rpgCatalogs.ts                       # 3 Familles de Ressources, Codex Solaire, Palier IV (PT-61)
 ├── contracts/
-│   └── schemas.ts                           # Contrats Zod v4 (Mutations, Entités, Sauvegardes)
+│   └── schemas.ts                           # Contrats Zod v4 (WorldBrief, TurnBatch, Cartes, Vecteurs)
 ├── core/
-│   ├── fallbackEvents.ts                    # Générateur déterministe d'événements Pax Historia
-│   ├── noise.ts                             # Bruit Simplex/Fractal 2D & 3D multi-octaves
-│   ├── prng.ts                              # Générateur pseudo-aléatoire Mulberry32 seedé
-│   └── terrainMath.ts                       # Courbure sphérique, 5 Micro-Climats, Plages, Montagnes
+│   ├── simulation/
+│   │   ├── simulationKernel.ts              # Noyau déterministe 10 Hz & Empreinte FNV-1a (PT-47/58)
+│   │   └── wasmBridge.ts                    # Pont réversible TS / Rust-WASM & Parité (PT-74/75)
+│   ├── events/
+│   │   ├── turnOrchestrator.ts              # Cycle 7 phases, Arbitre de Rythme & Banc 100 Tours (PT-53)
+│   │   └── semanticMemory.ts                # Mémoire Vectorielle & Similarité Cosinus (PT-78)
+│   └── fallbackEvents.ts                    # 12 Modèles Catégorisés déterministes (PT-55)
 ├── services/
-│   ├── aiTurnService.ts                     # Client API pour la génération de tours Gemini AI
-│   ├── assetPreloader.ts                    # Pré-calcul asynchrone durant le Boot Cinématique 3D
-│   ├── firebaseService.ts                   # Auth Google Firebase + Cloud Firestore World Saves
-│   └── saveService.ts                       # Persistance multi-slots locale + Import/Export JSON
-├── stores/
-│   └── worldStore.ts                        # Store Jotai (Zones, Ressources, Tiroirs HUD, Auth)
-├── three/
-│   ├── director.ts                          # Directeur WebGL (Gestes 1/2 doigts, Raycast, Boucle)
-│   ├── camera/cameraRig.ts                  # Caméra Orbite, Surface, Porte d'Arrivée & Globe 3D
-│   ├── entities/
-│   │   ├── buildings.ts                     # Édifices 3D multi-parties néo-classiques & stellaires
-│   │   └── npcs.ts                          # PNJ 3D (Import GLTF/GLB Web + Rig RPG Articulé)
-│   ├── textures/proceduralTextures.ts       # Textures PBR sRGB (Plages, Pavés Urbains, Globe)
-│   └── world/
-│       ├── arrivalZone.ts                   # Porte Céleste 3D & Navette Impériale
-│       ├── particles.ts                     # Particules atmosphériques circulaires douces
-│       ├── planetGlobe.ts                   # Globe 3D, 6 Terrasses, Routes Commerciales & Vaisseau
-│       ├── plateauTerrain.ts                # Plateau 112x112m, Quartiers Urbains, Montagnes & Horizon
-│       ├── spaceEnvironment.ts              # Éclairage céleste, Soleil, Anneaux & Nébuleuses
-│       └── weatherSystem.ts                 # Météo dynamique (Aurores, Poussière d'Or, Orages)
-└── components/
-    ├── boot/BootSequenceScreen.tsx          # Boot 3D Orbital -> Login Google Firebase -> Menu
-    ├── canvas/TerrariumMount.tsx            # Pont isolé React <-> SceneDirector Three.js
-    ├── hud/
-    │   ├── TopTelemetryBar.tsx              # Header minimaliste avec ressources rétractables
-    │   ├── BottomControlDock.tsx            # Dock pliable avec tiroirs « Vue » et « Play »
-    │   ├── PlanetaryZonesPanel.tsx          # Sélecteur rapide des 6 Zones Planétaires
-    │   └── TouchNavigationPad.tsx           # Pad directionnel & rotation tactile
-    ├── inspectors/                          # Cartes ancrées proprement au-dessus du footer
-    │   ├── NpcInspectorModal.tsx            # Fiche RPG (Maison, Tenue, Maison/Travail, 5 Aptitudes)
-    │   ├── BuildingInspectorModal.tsx       # Fiche Bâtiment, Quartier Urbain & Citoyens affectés
-    │   └── ArrivalZoneInspectorModal.tsx    # Fiche Astroport & Appel de convois
-    └── modals/
-        ├── RpgCatalogsAndArchitectModal.tsx # Grand Catalogue RPG, Maisons, Tenues & Mode Architecte
-        ├── BlueprintArchitectureModal.tsx   # Blueprint complet v4.0 intégré
-        ├── GameConfigModal.tsx              # Assistant 2 étapes (Personnage -> Monde/Biome/Météo)
-        └── SaveManagerModal.tsx             # Sauvegardes Cloud Firestore & Locales`}
+│   ├── aiTurnService.ts                     # Client /api/ai/turn & /api/ai/embed (PT-54/78)
+│   └── seedHubService.ts                    # Hub des Graines GXP4 & Détection Tauri (PT-80/81)
+└── three/
+    ├── capabilitiesBridge.ts                # Détecteur WebGPU/WebGL2 & Pont OffscreenCanvas (PT-76/77)
+    ├── registries/entityRegistries.ts       # Registres Diff-Réconciliés O(1) (PT-48)
+    ├── quality/qualityDirector.ts           # Directeur Qualité Adaptatif à Hystérésis (PT-49)
+    ├── materials/materialManager.ts         # Cache Matériaux LRU & Registre CC0 (PT-50/62)
+    └── world/
+        ├── horizonCrown.ts                  # Couronne de l'Aurore H1..H4 (PT-60)
+        ├── gerstnerWater.ts                 # Eau Analytique Gerstner 4 Houles (PT-25)
+        └── instancedForests.ts              # Forêts Instanciées & Chablis par biome (PT-27)`}
             </pre>
           </section>
         </div>
